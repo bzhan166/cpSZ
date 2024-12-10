@@ -1,6 +1,8 @@
 #ifndef _sz3_utils_hpp
 #define _sz3_utils_hpp
 
+#include<cassert>
+
 template<class T, class T_eb>
 class VariableEBLinearQuantizer{
 public:

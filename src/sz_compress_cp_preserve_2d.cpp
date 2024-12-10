@@ -15,8 +15,8 @@ void writefile(const char * file, Type * data, size_t num_elements){
 // maximal error bound to keep the sign of u0v1 - u0v2 + u1v2 - u1v0 + u2v0 - u2v1
 template<typename T>
 inline double max_eb_to_keep_sign_det2x2(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2){
-  double positive = 0;
-  double negative = 0;
+  T positive = 0;
+  T negative = 0;
   accumulate(u0*v1, positive, negative);
   accumulate(-u0*v2, positive, negative);
   accumulate(u1*v2, positive, negative);
@@ -28,8 +28,8 @@ inline double max_eb_to_keep_sign_det2x2(const T u0, const T u1, const T u2, con
 
 template<typename T>
 inline double max_eb_to_keep_sign_2d_offline_2(const T u0, const T u1, const int degree=2){
-  double positive = 0;
-  double negative = 0;
+  T positive = 0;
+  T negative = 0;
   accumulate(u0, positive, negative);
   accumulate(u1, positive, negative);
   return max_eb_to_keep_sign(positive, negative, degree);
@@ -37,8 +37,8 @@ inline double max_eb_to_keep_sign_2d_offline_2(const T u0, const T u1, const int
 
 template<typename T>
 inline double max_eb_to_keep_sign_2d_offline_4(const T u0, const T u1, const T u2, const T u3, const int degree=2){
-  double positive = 0;
-  double negative = 0;
+  T positive = 0;
+  T negative = 0;
   accumulate(u0, positive, negative);
   accumulate(u1, positive, negative);
   accumulate(u2, positive, negative);
@@ -81,8 +81,8 @@ inline double max_eb_to_keep_sign_eigen_delta_2(const T u0, const T u1, const T 
   {
     get_adjugate_matrix_for_position(x0, x1, x2, y0, y1, y2, c);
     // keep sign for B
-    double positive = 0;
-    double negative = 0;
+    T positive = 0;
+    T negative = 0;
     accumulate(c[0]*u0, positive, negative);
     accumulate(c[1]*u1, positive, negative);
     accumulate(-(c[0] + c[1])*u2, positive, negative);
@@ -106,8 +106,8 @@ inline double max_eb_to_keep_sign_eigen_delta_2(const T u0, const T u1, const T 
     coeff[4] = c[3]*v1;
     coeff[5] = - (c[3] + c[2])*v2;
     // keep sign for B^2 - 4*C
-    double positive = 0;
-    double negative = 0;
+    T positive = 0;
+    T negative = 0;
     accumulate_in_square(coeff, positive, negative);
     accumulate(-4*m*u1*v0, positive, negative);
     accumulate(4*m*u2*v0, positive, negative);
@@ -141,9 +141,9 @@ inline double max_eb_to_keep_position_and_type(const T u0, const T u1, const T u
 			double eb1 = MINF(max_eb_to_keep_sign_2d_offline_2(u2v0, -u0v2), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u1v2, -u2v1));
 			double eb2 = MINF(max_eb_to_keep_sign_2d_offline_2(u1v2, -u2v1), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u2v0, -u0v2));
 			double eb3 = MINF(max_eb_to_keep_sign_2d_offline_2(u0v1, -u1v0), max_eb_to_keep_sign_2d_offline_4(u1v2, -u2v1, u2v0, -u0v2));
-			double eb4 = MINF(eb3, max_eb_to_keep_sign_eigen_delta_2(u0, u1, u2, v0, v1, v2, x0, x1, x2, y0, y1, y2));
+			//double eb4 = MINF(eb3, max_eb_to_keep_sign_eigen_delta_2(u0, u1, u2, v0, v1, v2, x0, x1, x2, y0, y1, y2));
 			eb = MINF(eb1, eb2);
-			eb = MINF(eb, eb4);
+			eb = MINF(eb, eb3);
 		}
 		else{
 			// no critical point

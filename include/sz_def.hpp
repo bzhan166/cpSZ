@@ -147,7 +147,7 @@ struct meanInfo{
 #define MAX(a, b) ((a>b)?(a):(b))
 #define MIN(a, b) ((a<b)?(a):(b))
 template<class T>
-inline T MINF(const T& a, const T& b){
+[[nodiscard]] constexpr inline T MINF(const T& a, const T& b){
     return (a<b) ? (a) : (b);
 }
 

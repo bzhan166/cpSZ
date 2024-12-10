@@ -47,7 +47,7 @@ template <typename T> bool same_direction(T u0, T u1, T u2, T u3) {
 
 // maximal error bound to keep the sign of postive*(1+e)^d - negative*(1-e)^d
 template<typename T>
-inline double max_eb_to_keep_sign(const T positive, const T negative, int degree){
+[[nodiscard]] constexpr inline double max_eb_to_keep_sign(const T positive, const T negative, int degree){
   if((negative < 0) || (positive < 0)){
     printf("%.4f, %.4f\n", negative, positive);
     exit(0);
@@ -55,6 +55,8 @@ inline double max_eb_to_keep_sign(const T positive, const T negative, int degree
   if((negative == 0) || (positive == 0)){
     return 1;
   }
+
+
   // double c = fabs(positive - negative) / (positive + negative);
   double P = 0, N = 0;
   switch(degree){
@@ -75,6 +77,7 @@ inline double max_eb_to_keep_sign(const T positive, const T negative, int degree
 		exit(0);
   }
   return fabs(P - N)/(P + N);
+
 }
 
 /* ----------------------------- asqrt1 ----------------------------- */
@@ -125,7 +128,7 @@ inline float max_eb_to_keep_sign_3d_offline(const float positive, const float ne
 }
 
 template<typename T>
-inline void accumulate(const T value, double& positive, double& negative){
+constexpr inline void accumulate(const T volatile value, T & positive, T & negative){
 	if(value >= 0) positive += value;
 	else negative += - value;
 }
