@@ -180,7 +180,7 @@ __global__ void derive_eb(const T* dU, const T* dV, T* dEb, int r1, int r2, T ma
     }
     __syncthreads();
 
-    //TODO Edge cases
+    //Edge cases
     //top edge
     if(row==0 && col < r2-2 && localRow<TileDim-2 && localCol<TileDim-2){
         buf_eb[0][localCol] = max_pwr_eb;
