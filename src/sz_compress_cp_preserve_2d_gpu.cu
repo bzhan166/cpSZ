@@ -132,9 +132,20 @@ __global__ void derive_eb(const T* dU, const T* dV, T* dEb, int r1, int r2, T ma
     }
     __syncthreads();
 */
+
+    if(row<r1 && col<r2 && localRow<TileDim-2 && localCol<TileDim-2){
+        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow][localCol]);
+        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow][localCol]);
+        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow+1][localCol]);
+        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow][localCol+1]);
+        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow+1][localCol+1]);
+        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow+1][localCol+1]);
+    }
+    __syncthreads();
+
 /*
-    //For bug_check
-    if (row*r2+col == 796 && localRow<TileDim-2 && localCol<TileDim-2) {
+    //For centeral part bug_check
+    if (row*r2+col == 7199) {
         buf_eb[localRow][localCol] = min(per_cell_eb_U[localRow][localCol], per_cell_eb_L[localRow][localCol]);
         printf("buf_eb[%d][%d]: %.4f\n", localRow, localCol, buf_eb[localRow][localCol]);
 
@@ -163,38 +174,84 @@ __global__ void derive_eb(const T* dU, const T* dV, T* dEb, int r1, int r2, T ma
     }
     __syncthreads();
 */
-    if(row<r1 && col<r2 && localRow<TileDim-2 && localCol<TileDim-2){
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow][localCol]);
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow][localCol]);
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow+1][localCol]);
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow][localCol+1]);
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow+1][localCol+1]);
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow+1][localCol+1]);
-    }
-    __syncthreads();
 
     if(row<r1-2 && col<r2-2 && localRow<TileDim-2 && localCol<TileDim-2){
         dEb[(row+1) * r2 + (col+1)] = buf_eb[localRow][localCol];
     }
     __syncthreads();
-/*
+
     //TODO Edge cases
     //top edge
-    if(row==0 && col < r2-2 && localCol<TileDim-2){
-        buf_eb[localRow][localCol] = min(per_cell_eb_U[localRow][localCol], buf_eb[localRow][localCol]);
-        buf_eb[localRow][localCol] = min(per_cell_eb_U[localRow][localCol+1], buf_eb[localRow][localCol]);
-        buf_eb[localRow][localCol] = min(per_cell_eb_L[localRow][localCol+1], buf_eb[localRow][localCol]);
-        dEb[row*r2 + col+1] = buf_eb[localRow][localCol];
+    if(row==0 && col < r2-2 && localRow<TileDim-2 && localCol<TileDim-2){
+        buf_eb[0][localCol] = max_pwr_eb;
+        buf_eb[0][localCol] = min(per_cell_eb_U[localRow][localCol], buf_eb[0][localCol]);
+        buf_eb[0][localCol] = min(per_cell_eb_U[localRow][localCol+1], buf_eb[0][localCol]);
+        buf_eb[0][localCol] = min(per_cell_eb_L[localRow][localCol+1], buf_eb[0][localCol]);
+        dEb[row*r2 + col+1] = buf_eb[0][localCol];
     }
+    __syncthreads();
 
     //bottom edge
-    if(row==r1-1 && col < r2-2 && localCol<TileDim-2){
-        buf_eb[localRow][localCol] = min(per_cell_eb_U[localRow][localCol], buf_eb[localRow][localCol]);
-        buf_eb[localRow][localCol] = min(per_cell_eb_U[localRow][localCol+1], buf_eb[localRow][localCol]);
-        buf_eb[localRow][localCol] = min(per_cell_eb_L[localRow][localCol+1], buf_eb[localRow][localCol]);
-        dEb[row*r2 + col+1] = buf_eb[localRow][localCol];
+    if(row==r1-1 && col < r2-2 && localRow<TileDim-2 && localCol<TileDim-2){
+        buf_eb[0][localCol] = max_pwr_eb;
+        buf_eb[0][localCol] = min(per_cell_eb_U[localRow-1][localCol], buf_eb[0][localCol]);
+        buf_eb[0][localCol] = min(per_cell_eb_L[localRow-1][localCol], buf_eb[0][localCol]);
+        buf_eb[0][localCol] = min(per_cell_eb_L[localRow-1][localCol+1], buf_eb[0][localCol]);
+        dEb[row*r2 + col+1] = buf_eb[0][localCol];
     }
-*/
+    __syncthreads();
+
+    //left edge
+    if(col==0 && row < r1-2 && localRow<TileDim-2 && localCol<TileDim-2){
+        buf_eb[localRow][0] = max_pwr_eb;
+        buf_eb[localRow][0] = min(per_cell_eb_L[localRow][localCol], buf_eb[localRow][0]);
+        buf_eb[localRow][0] = min(per_cell_eb_U[localRow+1][localCol], buf_eb[localRow][0]);
+        buf_eb[localRow][0] = min(per_cell_eb_L[localRow+1][localCol], buf_eb[localRow][0]);
+        dEb[(row+1)*r2 + col] = buf_eb[localRow][0];
+    }
+    __syncthreads();
+
+    //right edge
+    if(row < r1-2 && col==r2-1 && localRow<TileDim-2 && localCol<TileDim-2){
+        buf_eb[localRow][0] = max_pwr_eb;
+        buf_eb[localRow][0] = min(per_cell_eb_L[localRow][localCol-1], buf_eb[localRow][0]);
+        buf_eb[localRow][0] = min(per_cell_eb_U[localRow][localCol-1], buf_eb[localRow][0]);
+        buf_eb[localRow][0] = min(per_cell_eb_U[localRow+1][localCol-1], buf_eb[localRow][0]);
+        dEb[(row+1)*r2 + col] = buf_eb[localRow][0];
+    }
+    __syncthreads();
+
+    //top left corner
+    if(row==0&&col==0){
+        buf_eb[0][0] = max_pwr_eb;
+        buf_eb[0][0] = min(per_cell_eb_U[0][0], buf_eb[0][0]);
+        buf_eb[0][0] = min(per_cell_eb_L[0][0], buf_eb[0][0]);
+        dEb[0] = buf_eb[0][0];
+    }
+
+    //top right corner
+    if(row==0&&col==r2-1){
+        buf_eb[0][0] = max_pwr_eb;
+        buf_eb[0][0] = min(per_cell_eb_U[0][localCol-1], buf_eb[0][0]);
+        dEb[r2-1] = buf_eb[0][0];
+    }
+
+    //bottom left corner
+    if(row==r1-1&&col==0){
+        buf_eb[0][0] = max_pwr_eb;
+        buf_eb[0][0] = min(per_cell_eb_L[localRow-1][0], buf_eb[0][0]);
+        dEb[(r1-1)*r2] = buf_eb[0][0];
+    }
+
+    //bottom right corner
+    if(row==r1-1&&col==r2-1){
+        buf_eb[0][0] = max_pwr_eb;
+        buf_eb[0][0] = min(per_cell_eb_U[localRow-1][localCol-1], buf_eb[0][0]);
+        buf_eb[0][0] = min(per_cell_eb_L[localRow-1][localCol-1], buf_eb[0][0]);
+        dEb[(r1-1)*r2+r2-1] = buf_eb[0][0];
+    }
+    __syncthreads();
+
 }
 
 // compression with pre-computed error bounds
@@ -206,17 +263,8 @@ sz_compress_cp_preserve_2d_offline_cpu_gpu(const T * U, const T * V, size_t r1, 
     T * eb = (T *) malloc(num_elements * sizeof(T));
     for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
     T * eb_gpu = (T *) malloc(num_elements * sizeof(T));
-    //Test Use, remebr to delete
-    for(size_t i = 0; i < r1; i++){
-        for(size_t j = 0; j < r2; j++){
-            if(i == 0 || i == r1-1 || j == 0 || j == r2-1){
-                eb_gpu[i*r2+j] = 0;
-            }
-            else {
-                eb_gpu[i*r2+j] = max_pwr_eb;
-            }
-        }
-    }
+    for(int i=0; i<num_elements; i++) eb_gpu[i] = max_pwr_eb;
+ 
     const T * U_pos = U;
     const T * V_pos = V;
     T * eb_pos = eb;
@@ -294,35 +342,21 @@ sz_compress_cp_preserve_2d_offline_cpu_gpu(const T * U, const T * V, size_t r1, 
     double maxdiff = 0.0;
     int count=0;
     int maxdiff_index = 0;
-    int count_zero = 0;
 
-    for (int i = 1; i < r1-1; i++){
-        for(int j = 1; j < r2-1; j++){
-            diff = fabs(eb_gpu[i*r2+j] - eb[i*r2+j]);
-            if(diff > maxdiff)
-            { 
-                maxdiff = diff;
-                maxdiff_index = i;    
-            }
-            if (diff > 1e-7) {
-                //printf("error. %5.2f,%5.2f,%d\n", eb_gpu[i],eb[i],i);
-                //break;
-                count++;
-            }
+    for (int i = 0; i < r1*r2; i++){
+        diff = fabs(eb_gpu[i] - eb[i]);
+        if(diff > maxdiff)
+        { 
+            maxdiff = diff;
+            maxdiff_index = i;    
+        }
+        if (diff > 1e-7) {
+            //printf("error. eb_gpu: %5.2f, eb: %5.2f,%d\n", eb_gpu[i],eb[i],i);
+            //break;
+            count++;
         }
     }
-    for(size_t i = 0; i < r1; i++){
-        for(size_t j = 0; j < r2; j++){
-            if(i == 0 || i == r1-1 || j == 0 || j == r2-1){
-                if(eb_gpu[i*r2+j] != 0){
-                    printf("error\n");
-                    break;
-                };
-            }
-        }
-    }
-    printf("count_zero: %d\n", count_zero);
-    printf("maxdiff: %f, maxdiff_index: %d, count: %d\n", maxdiff, maxdiff_index, count);
+    printf("maxdiff: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
     printf("eb_gpu: %f, eb: %f\n", eb_gpu[maxdiff_index], eb[maxdiff_index]);
     
     /*
