@@ -11,7 +11,8 @@
 template<typename T>
 using unpred_vec = std::vector<T>;
 
-inline int eb_exponential_quantize(double& eb, const int base, const double log_of_base, const double threshold=std::numeric_limits<float>::epsilon()){
+template<typename T>
+[[nodiscard]] constexpr inline int eb_exponential_quantize(T& eb, const int base, const T log_of_base, const T threshold=std::numeric_limits<T>::epsilon()){
 	if(eb <= threshold){
 		eb = 0;
 		return 0;

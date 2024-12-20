@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cmath>
 #include <ctime>
+#include <sys/time.h>
 
 template<typename Type>
 Type * readfile(const char * file, size_t& num){
@@ -103,6 +104,12 @@ void verify(Type * ori_data, Type * data, size_t num_elements){
     printf ("Max pw relative error = %f\n", maxpw_relerr);
     printf ("PSNR = %f, NRMSE= %.20G\n", psnr,nrmse);
     printf ("acEff=%f\n", acEff);   
+}
+
+double get_sec(){
+    struct timeval time;
+    gettimeofday(&time, NULL);
+    return (time.tv_sec + 1e-6 * time.tv_usec);
 }
 
 #endif
