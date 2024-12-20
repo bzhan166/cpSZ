@@ -9,6 +9,8 @@
 #include "utils.hpp"
 using namespace std;
 
+#include "kernel/lrz/lproto.hh"
+
 template<typename T>
 [[nodiscard]] constexpr inline T max_eb_to_keep_sign_2d_offline_2(const T volatile u0, const T volatile u1, const int degree=2){
     T positive = 0;
@@ -320,6 +322,17 @@ sz_compress_cp_preserve_2d_offline_cpu_gpu(const T * U, const T * V, size_t r1, 
     //run kernel
     derive_eb_offline<<<gridSize, blockSize>>>(dU, dV, dEb, r1, r2, max_pwr_eb);
     cudaDeviceSynchronize();
+
+	// error quantization (example only)
+	uint16_t *eq;
+	float lrz_time = 0.0;
+	cudaMalloc(&eq, r2 * r1 * sizeof(uint16_t));
+	cudaMemset(&eq, 0, r2 * r1 * sizeof(uint16_t));
+
+	psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier<T, uint16_t>(
+		dU, dim3(r2, r1, 1), eq, nullptr /* ignore outlier*/, -1.0, 512,
+		&lrz_time, 0);
+	cudaDeviceSynchronize();
 
     err = cudaGetLastError();
     if (err != cudaSuccess) {
