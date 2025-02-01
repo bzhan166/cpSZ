@@ -260,7 +260,7 @@ __global__ void derive_eb_offline(const T* dU, const T* dV, T* dEb, int r1, int 
 // compression with pre-computed error bounds
 template<typename T>
 unsigned char *
-sz_compress_cp_preserve_2d_offline_cpu_gpu(const T * U, const T * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, T max_pwr_eb){
+sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, T max_pwr_eb){
     size_t num_elements = r1 * r2;
     T * eb = (T *) malloc(num_elements * sizeof(T));
     for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
@@ -322,6 +322,7 @@ sz_compress_cp_preserve_2d_offline_cpu_gpu(const T * U, const T * V, size_t r1, 
     //run kernel
     derive_eb_offline<<<gridSize, blockSize>>>(dU, dV, dEb, r1, r2, max_pwr_eb);
     cudaDeviceSynchronize();
+    printf("compute eb_gpu done\n"); 
 
 	// error quantization (example only)
 	uint16_t *eq;
@@ -330,7 +331,7 @@ sz_compress_cp_preserve_2d_offline_cpu_gpu(const T * U, const T * V, size_t r1, 
 	cudaMemset(&eq, 0, r2 * r1 * sizeof(uint16_t));
 
 	psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier<T, uint16_t>(
-		dU, dim3(r2, r1, 1), eq, nullptr /* ignore outlier*/, -1.0, 512,
+		dU, dim3(r2, r1, 1), eq, nullptr/*ignore outlier*/, 1.0, 512,
 		&lrz_time, 0);
 	cudaDeviceSynchronize();
 
@@ -379,8 +380,7 @@ sz_compress_cp_preserve_2d_offline_cpu_gpu(const T * U, const T * V, size_t r1, 
             float * eb_row_pos = eb_pos;
             for(int j=0; j<r2-1; j++){
                 for(int k=0; k<2; k++){
-                    //printf("U_r
-                    ow_pos: %p, V_row_pos: %p, eb_row_pos: %p\n", U_row_pos, V_row_pos, eb_row_pos);
+                    //printf("U_row_pos: %p, V_row_pos: %p, eb_row_pos: %p\n", U_row_pos, V_row_pos, eb_row_pos);
                     auto X = (k == 0) ? X_upper : X_lower;
                     auto offset = (k == 0) ? offset_upper : offset_lower;
                     // reversed order!
@@ -406,8 +406,7 @@ sz_compress_cp_preserve_2d_offline_cpu_gpu(const T * U, const T * V, size_t r1, 
 
     cudaFree(dU);
     cudaFree(dV);
-    cudaFree(dEb);
-    printf("compute eb_gpu done\n");   
+    cudaFree(dEb);  
 
 /*
     //for verfiy used
@@ -433,7 +432,7 @@ sz_compress_cp_preserve_2d_offline_cpu_gpu(const T * U, const T * V, size_t r1, 
     printf("eb_gpu: %f, eb: %f\n", eb_gpu[maxdiff_index], eb[maxdiff_index]);
 */
 
-/*
+    /*
     double * eb_u = (double *) malloc(num_elements * sizeof(double));
     double * eb_v = (double *) malloc(num_elements * sizeof(double));
     int * eb_quant_index = (int *) malloc(2*num_elements*sizeof(int));
@@ -481,12 +480,14 @@ sz_compress_cp_preserve_2d_offline_cpu_gpu(const T * U, const T * V, size_t r1, 
     free(compressed_eb);
     free(compressed_u);
     free(compressed_v);
-*/
+    */
+
     free(eb);
     free(eb_gpu); 
     return 0;
 }
 
+/* online fuction
 template<typename T>
 constexpr inline void get_adjugate_matrix_for_position(const T x0, const T x1, const T x2, const T y0, const T y1, const T y2, T c[4]){
   T determinant = (x0 - x2)*(y1 - y2) - (x1 - x2)*(y0 - y2);
@@ -564,7 +565,7 @@ derive_cp_eb_for_positions_online(const T u0, const T u1, const T u2, const T v0
 
 template<typename T>
 unsigned char *
-sz_compress_cp_preserve_2d_online_cpu_gpu(const T * U, const T * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, double max_pwr_eb){
+sz_compress_cp_preserve_2d_online_gpu(const T * U, const T * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, double max_pwr_eb){
     size_t num_elements = r1 * r2;
     T * decompressed_U = (T *) malloc(num_elements*sizeof(T));
     memcpy(decompressed_U, U, num_elements*sizeof(T));
@@ -584,11 +585,11 @@ sz_compress_cp_preserve_2d_online_cpu_gpu(const T * U, const T * V, size_t r1, s
     T * V_pos = decompressed_V;
     // offsets to get six adjacent triangle indices
     // the 7-th rolls back to T0
-    /*
-            T3	T4
-    	T2	X 	T5
-    	T1	T0(T6)
-    */
+    
+    //      T3	T4
+    //	T2	X 	T5
+    //	T1	T0 (T6)
+
     const int offsets[7] = {
     	-(int)r2, -(int)r2 - 1, -1, (int)r2, (int)r2+1, 1, -(int)r2
     };
@@ -654,10 +655,10 @@ sz_compress_cp_preserve_2d_online_cpu_gpu(const T * U, const T * V, size_t r1, s
     				// eb_quant_index_pos[k] = eb_linear_quantize(abs_eb, 1e-3);
     				if(eb_quant_index_pos[k] > 0){
     					// get adjacent data and perform Lorenzo
-    					/*
-    						d2 X
-    						d0 d1l
-    					*/
+    					
+    					//	d2 X
+    					//	d0 d1l
+    					
     					T d0 = (i && j) ? cur_data_pos[-1 - r2] : 0;
     					T d1 = (i) ? cur_data_pos[-r2] : 0;
     					T d2 = (j) ? cur_data_pos[-1] : 0;
@@ -716,25 +717,26 @@ sz_compress_cp_preserve_2d_online_cpu_gpu(const T * U, const T * V, size_t r1, s
     free(decompressed_U);
     free(decompressed_V);
     printf("offsets eb_q, data_q, unpred: %ld %ld %ld\n", eb_quant_index_pos - eb_quant_index, data_quant_index_pos - data_quant_index, unpred_data.size());
-    /*
-    unsigned char * compressed = (unsigned char *) malloc(2*num_elements*sizeof(T));
-    unsigned char * compressed_pos = compressed;
-    write_variable_to_dst(compressed_pos, base);
-    write_variable_to_dst(compressed_pos, threshold);
-    write_variable_to_dst(compressed_pos, intv_radius);
-    size_t unpredictable_count = unpred_data.size();
-    write_variable_to_dst(compressed_pos, unpredictable_count);
-    write_array_to_dst(compressed_pos, (T *)&unpred_data[0], unpredictable_count);	
-    Huffman_encode_tree_and_data(2*1024, eb_quant_index, 2*num_elements, compressed_pos);
-    free(eb_quant_index);
-    Huffman_encode_tree_and_data(2*capacity, data_quant_index, 2*num_elements, compressed_pos);
-    printf("pos = %ld\n", compressed_pos - compressed);
-    free(data_quant_index);
-    compressed_size = compressed_pos - compressed;
-    return compressed;	
-    */
+    
+    //unsigned char * compressed = (unsigned char *) malloc(2*num_elements*sizeof(T));
+    //unsigned char * compressed_pos = compressed;
+    //write_variable_to_dst(compressed_pos, base);
+    //write_variable_to_dst(compressed_pos, threshold);
+    //write_variable_to_dst(compressed_pos, intv_radius);
+    //size_t unpredictable_count = unpred_data.size();
+    //write_variable_to_dst(compressed_pos, unpredictable_count);
+    //write_array_to_dst(compressed_pos, (T *)&unpred_data[0], unpredictable_count);	
+    //Huffman_encode_tree_and_data(2*1024, eb_quant_index, 2*num_elements, compressed_pos);
+    //free(eb_quant_index);
+    //Huffman_encode_tree_and_data(2*capacity, data_quant_index, 2*num_elements, compressed_pos);
+    //printf("pos = %ld\n", compressed_pos - compressed);
+    //free(data_quant_index);
+    //compressed_size = compressed_pos - compressed;
+    //return compressed;	
+    
     return 0;
 }
+*/
 
 int main(int argc, char ** argv){
     size_t num_elements = 0;
@@ -761,16 +763,16 @@ int main(int argc, char ** argv){
     int err = 0;
     err = clock_gettime(CLOCK_REALTIME, &start);
     cout << "start Compression\n";
-    // unsigned char * result = sz_compress_cp_preserve_2d_offline_cpu_gpu(U, V, r1, r2, result_size, false, max_eb);
+    unsigned char * result = sz_compress_cp_preserve_2d_offline_gpu(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_offline_log(U, V, r1, r2, result_size, false, max_eb);
-    unsigned char * result = sz_compress_cp_preserve_2d_online_cpu_gpu(U, V, r1, r2, result_size, false, max_eb);
+    // unsigned char * result = sz_compress_cp_preserve_2d_online_gpu(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online_abs(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online_abs_relax_FN(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_bilinear_online_log(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online_log(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz3_compress_cp_preserve_2d_online_abs(U, V, r1, r2, result_size, false, max_eb);
 
-
+    /*
     unsigned char * result_after_lossless = NULL;
     size_t lossless_outsize = sz_lossless_compress(ZSTD_COMPRESSOR, 3, result, result_size, &result_after_lossless);
     err = clock_gettime(CLOCK_REALTIME, &end);
@@ -797,10 +799,12 @@ int main(int argc, char ** argv){
 
     writefile((string(argv[1]) + ".out").c_str(), dec_U, num_elements);
     writefile((string(argv[2]) + ".out").c_str(), dec_V, num_elements);
-   
+    
+    */
     free(result);
     free(U);
     free(V);
+    
     //free(dec_U);
     //free(dec_V);
 }

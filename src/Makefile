@@ -25,3 +25,6 @@ lproto_x.o: cusz_partial/lproto_x.cu
 		-I$(HOME)/install/include/cusz \
 		-Icusz_partial \
 		-DPSZ_USE_CUDA=1 
+
+clean:
+	rm -f cpszg lproto_c.o lproto_x.o
