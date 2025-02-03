@@ -146,6 +146,7 @@ pszerror GPU_PROTO_c_lorenzo_nd_with_outlier(
     void* out_outlier, double const eb, uint16_t const radius,
     float* time_elapsed, void* stream)
 {
+
   auto divide3 = [](dim3 len, dim3 sublen) {
     return dim3(
         (len.x - 1) / sublen.x + 1, (len.y - 1) / sublen.y + 1,
@@ -162,7 +163,6 @@ pszerror GPU_PROTO_c_lorenzo_nd_with_outlier(
   };
 
   using Compact = typename CompactDram<PROPER_GPU_BACKEND, T>::Compact;
-
   auto ot = (Compact*)out_outlier;
 
   constexpr auto Tile1D = dim3(256, 1, 1), Tile2D = dim3(16, 16, 1),
@@ -180,7 +180,7 @@ pszerror GPU_PROTO_c_lorenzo_nd_with_outlier(
 
   CREATE_GPUEVENT_PAIR;
   START_GPUEVENT_RECORDING(stream);
-
+  
   if (ndim() == 1) {
     psz::KERNEL_CUHIP_prototype_c_lorenzo_1d1l<T>
         <<<Grid1D, Block1D, 0, (cudaStream_t)stream>>>(
@@ -202,7 +202,7 @@ pszerror GPU_PROTO_c_lorenzo_nd_with_outlier(
   else {
     throw std::runtime_error("Lorenzo only works for 123-D.");
   }
-
+  
   STOP_GPUEVENT_RECORDING(stream);
   CHECK_GPU(cudaStreamSynchronize((cudaStream_t)stream));
 
@@ -210,6 +210,7 @@ pszerror GPU_PROTO_c_lorenzo_nd_with_outlier(
   DESTROY_GPUEVENT_PAIR;
 
   return CUSZ_SUCCESS;
+
 }
 
 }  // namespace psz::cuhip
