@@ -9,6 +9,7 @@ cpsz: sz_compress_cp_preserve_2d_gpu.cu cusz_lrzc
 		--expt-relaxed-constexpr \
 		-DPSZ_USE_CUDA=1 \
 		lproto_c.o \
+		lproto_x.o \
 		-o cpszg
 
 cusz_lrzc: lproto_c.o

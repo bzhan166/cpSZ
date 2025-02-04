@@ -93,6 +93,49 @@ __global__ void KERNEL_CUHIP_prototype_x_lorenzo_2d1l(
   if (check_boundary2()) { out_data[id] = data(0, 0) * ebx2; }
 }
 
+
+
+template <
+    typename T, int TileDim = 16, typename Eq = uint16_t, typename Fp = T>
+__global__ void KERNEL_CUHIP_prototype_x_lorenzo_2d1l__eb_list(
+    Eq* const in_eq, T* const in_outlier, T* const out_data,
+    dim3 const data_len3, dim3 const data_leap3, uint16_t const radius,
+    T* eb_list)
+{
+  SETUP_ND_GPU_CUDA;
+  __shared__ T buf[TileDim][TileDim + 1];
+
+  auto id = gid2();
+  auto data = [&](auto dx, auto dy) -> T& {
+    return buf[t().y + dy][t().x + dx];
+  };
+
+  if (check_boundary2())
+    data(0, 0) = in_outlier[id] + static_cast<T>(in_eq[id]) - radius;  // fuse
+  else
+    data(0, 0) = 0;
+  __syncthreads();
+
+  for (auto d = 1; d < TileDim; d *= 2) {
+    T n = 0;
+    if (t().x >= d) n = data(-d, 0);
+    __syncthreads();
+    if (t().x >= d) data(0, 0) += n;
+    __syncthreads();
+  }
+
+  for (auto d = 1; d < TileDim; d *= 2) {
+    T n = 0;
+    if (t().y >= d) n = data(0, -d);
+    __syncthreads();
+    if (t().y >= d) data(0, 0) += n;
+    __syncthreads();
+  }
+
+  if (check_boundary2()) { out_data[id] = data(0, 0) * (eb_list[id] * 2); }
+}
+
+
 template <typename T, int TileDim = 8, typename Eq = uint16_t, typename Fp = T>
 __global__ void KERNEL_CUHIP_prototype_x_lorenzo_3d1l(
     Eq* const in_eq, T* const in_outlier, T* const out_data,
@@ -205,13 +248,74 @@ pszerror GPU_PROTO_x_lorenzo_nd(
   return CUSZ_SUCCESS;
 }
 
+
+template <typename T, typename Eq = uint16_t>
+pszerror GPU_PROTO_x_lorenzo_nd__eb_list(
+    Eq* in_eq, T* in_outlier, T* out_data, dim3 const data_len3,
+    T* eb_list, int const radius, float* time_elapsed, void* stream)
+{
+  auto divide3 = [](dim3 len, dim3 sublen) {
+    return dim3(
+        (len.x - 1) / sublen.x + 1, (len.y - 1) / sublen.y + 1,
+        (len.z - 1) / sublen.z + 1);
+  };
+
+  auto ndim = [&]() {
+    if (data_len3.z == 1 and data_len3.y == 1)
+      return 1;
+    else if (data_len3.z == 1 and data_len3.y != 1)
+      return 2;
+    else
+      return 3;
+  };
+
+  constexpr auto Tile1D = dim3(256, 1, 1), Tile2D = dim3(16, 16, 1),
+                 Tile3D = dim3(8, 8, 8);
+  constexpr auto Block1D = dim3(256, 1, 1), Block2D = dim3(16, 16, 1),
+                 Block3D = dim3(8, 8, 8);
+
+  auto Grid1D = divide3(data_len3, Tile1D),
+       Grid2D = divide3(data_len3, Tile2D),
+       Grid3D = divide3(data_len3, Tile3D);
+
+  // error bound
+  //auto ebx2 = eb * 2, ebx2_r = 1 / ebx2;
+  auto data_leap3 = dim3(1, data_len3.x, data_len3.x * data_len3.y);
+
+  CREATE_GPUEVENT_PAIR;
+  START_GPUEVENT_RECORDING(stream);
+
+  if (ndim() == 1) {
+//
+  }
+  else if (ndim() == 2) {
+    psz::KERNEL_CUHIP_prototype_x_lorenzo_2d1l__eb_list<T>
+        <<<Grid2D, Block2D, 0, (cudaStream_t)stream>>>(
+            in_eq, in_outlier, out_data, data_len3, data_leap3, radius, eb_list);
+  }
+  else if (ndim() == 3) {
+//
+  }
+
+  STOP_GPUEVENT_RECORDING(stream);
+  CHECK_GPU(cudaStreamSynchronize((cudaStream_t)stream));
+
+  TIME_ELAPSED_GPUEVENT(time_elapsed);
+  DESTROY_GPUEVENT_PAIR;
+
+  return CUSZ_SUCCESS;
+}
+
 }  // namespace psz::cuhip
 
 ////////////////////////////////////////////////////////////////////////////////
 #define INSTANTIATIE_GPU_LORENZO_PROTO_X_2params(T)                         \
   template pszerror psz::cuhip::GPU_PROTO_x_lorenzo_nd<T>(                  \
       uint16_t * in_eq, T * in_outlier, T * out_data, dim3 const data_len3, \
-      double const eb, int const radius, float* time_elapsed, void* stream);
+      double const eb, int const radius, float* time_elapsed, void* stream);\
+  template pszerror psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T>(         \
+      uint16_t * in_eq, T * in_outlier, T * out_data, dim3 const data_len3, \
+      T* eb_list, int const radius, float* time_elapsed, void* stream);
 
 #define INSTANTIATIE_LORENZO_PROTO_X_1param(T) \
   INSTANTIATIE_GPU_LORENZO_PROTO_X_2params(T);

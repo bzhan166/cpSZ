@@ -7,6 +7,8 @@
 #include "sz3_utils.hpp"
 #include "sz_lossless.hpp"
 #include "utils.hpp"
+#include <thrust/scatter.h>
+#include <thrust/execution_policy.h>
 using namespace std;
 
 #include "kernel/lrz/lproto.hh"
@@ -441,7 +443,7 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
 // compression with pre-computed error bounds
 template<typename T>
 unsigned char *
-sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, T max_pwr_eb){
+sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, T max_pwr_eb, T* ot_val, uint32_t* ot_idx, uint32_t* ot_num){
     size_t num_elements = r1 * r2;
     T * eb = (T *) malloc(num_elements * sizeof(T));
     for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
@@ -524,10 +526,30 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaMalloc(&eq, r2 * r1 * sizeof(uint16_t));
     cudaMemset(eq, 0, r2 * r1 * sizeof(uint16_t));   
 
-    psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier<T, uint16_t>(
-    	dU, dim3(r2, r1, 1), eq, nullptr, 0.01, 512, &lrz_time, 0);
+    psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct<T, uint16_t>(
+    	dU, dim3(r2, r1, 1), eq, ot_val, ot_idx, ot_num, 0.01, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
 
+    psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, uint16_t>(
+    	dU, dim3(r2, r1, 1), eq, ot_val, ot_idx, ot_num, dEb, 512, &lrz_time, 0);
+    cudaDeviceSynchronize();
+
+    T* dU_decomp; cudaMalloc(&dU_decomp, r1 * r2 * sizeof(T));
+
+    thrust::scatter(thrust::device, ot_val, ot_val + *ot_num, ot_idx, dU_decomp);
+
+
+/*
+template <typename T, typename Eq>
+pszerror GPU_PROTO_x_lorenzo_nd(
+    Eq* in_eq, T* in_outlier, T* out_data, dim3 const data_len3,
+    double const eb, int const radius, float* time_elapsed, void* stream);
+*/
+
+    psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
+    	eq, /*input*/dU_decomp, /*output*/dU_decomp, dim3(r2, r1, 1), dEb, 512, &lrz_time, 0);
+
+    printf("compute eq done\n");
     err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("Kernel launch failed: %s\n", cudaGetErrorString(err));
@@ -988,7 +1010,12 @@ int main(int argc, char ** argv){
     int err = 0;
     err = clock_gettime(CLOCK_REALTIME, &start);
     cout << "start Compression\n";
-    unsigned char * result = sz_compress_cp_preserve_2d_offline_gpu(U, V, r1, r2, result_size, false, max_eb);
+
+    float* ot_val; cudaMalloc(&ot_val, r2 * r1 * sizeof(float) / 5);
+    uint32_t* ot_idx; cudaMalloc(&ot_idx, r2 * r1 * sizeof(uint32_t) / 5);
+    uint32_t* ot_num; cudaMallocManaged(&ot_num, sizeof(uint32_t));
+
+    unsigned char * result = sz_compress_cp_preserve_2d_offline_gpu(U, V, r1, r2, result_size, false, max_eb, ot_val, ot_idx, ot_num);
     // unsigned char * result = sz_compress_cp_preserve_2d_offline_log(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online_gpu(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online_abs(U, V, r1, r2, result_size, false, max_eb);
@@ -1029,6 +1056,9 @@ int main(int argc, char ** argv){
     free(result);
     free(U);
     free(V);
+    cudaFree(ot_val);
+    cudaFree(ot_idx);
+    cudaFree(ot_num);
     
     //free(dec_U);
     //free(dec_V);
