@@ -520,15 +520,21 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
 
 
     //error quantization (example only)
+    //parallel fatter
     
+    T* zero_eb_data;
+    uint32_t* zero_eb_idx;
+    cudaMalloc(&zero_eb_data, r1 * r2 * sizeof(T) / 2);
+    cudaMalloc(&zero_eb_idx, r1 * r2 * sizeof(uint32_t) / 2);
+
+    thrust::zip_iterator<thrust::tuple<T*, T*>> tup_dEb_dU = thrust::make_zip_iterator(thrust::make_tuple(dEb, dU));
+    thrust::zip_iterator<thrust::tuple<T*, uint32_t*>> tup_zero_eb_res = thrust::make_zip_iterator(thrust::make_tuple(zero_eb_data, zero_eb_idx)); 
+    auto zero_eb_count = thrust::copy_if(thrust::device, tup_dEb_dU, tup_dEb_dU + r1 * r2, dEb, is_zero<T>()) - ;
+
     uint16_t *eq;
     float lrz_time = 0.0;
     cudaMalloc(&eq, r2 * r1 * sizeof(uint16_t));
     cudaMemset(eq, 0, r2 * r1 * sizeof(uint16_t));   
-
-    psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct<T, uint16_t>(
-    	dU, dim3(r2, r1, 1), eq, ot_val, ot_idx, ot_num, 0.01, 512, &lrz_time, 0);
-    cudaDeviceSynchronize();
 
     psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, uint16_t>(
     	dU, dim3(r2, r1, 1), eq, ot_val, ot_idx, ot_num, dEb, 512, &lrz_time, 0);
