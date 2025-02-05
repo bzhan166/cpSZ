@@ -12,7 +12,6 @@
 using namespace std;
 
 #include "kernel/lrz/lproto.hh"
-#include "mem/compact.hh"
 
 template<typename T>
 [[nodiscard]] constexpr inline T max_eb_to_keep_sign_2d_offline_2(const T volatile u0, const T volatile u1, const int degree=2){
@@ -526,11 +525,11 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     uint32_t* zero_eb_idx;
     cudaMalloc(&zero_eb_data, r1 * r2 * sizeof(T) / 2);
     cudaMalloc(&zero_eb_idx, r1 * r2 * sizeof(uint32_t) / 2);
-
+/*
     thrust::zip_iterator<thrust::tuple<T*, T*>> tup_dEb_dU = thrust::make_zip_iterator(thrust::make_tuple(dEb, dU));
     thrust::zip_iterator<thrust::tuple<T*, uint32_t*>> tup_zero_eb_res = thrust::make_zip_iterator(thrust::make_tuple(zero_eb_data, zero_eb_idx)); 
     auto zero_eb_count = thrust::copy_if(thrust::device, tup_dEb_dU, tup_dEb_dU + r1 * r2, dEb, is_zero<T>()) - ;
-
+*/
     uint16_t *eq;
     float lrz_time = 0.0;
     cudaMalloc(&eq, r2 * r1 * sizeof(uint16_t));
@@ -543,14 +542,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     T* dU_decomp; cudaMalloc(&dU_decomp, r1 * r2 * sizeof(T));
 
     thrust::scatter(thrust::device, ot_val, ot_val + *ot_num, ot_idx, dU_decomp);
-
-
-/*
-template <typename T, typename Eq>
-pszerror GPU_PROTO_x_lorenzo_nd(
-    Eq* in_eq, T* in_outlier, T* out_data, dim3 const data_len3,
-    double const eb, int const radius, float* time_elapsed, void* stream);
-*/
 
     psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
     	eq, /*input*/dU_decomp, /*output*/dU_decomp, dim3(r2, r1, 1), dEb, 512, &lrz_time, 0);
@@ -1012,9 +1003,9 @@ int main(int argc, char ** argv){
     */
 
     size_t result_size = 0;
-    struct timespec start, end;
-    int err = 0;
-    err = clock_gettime(CLOCK_REALTIME, &start);
+    //struct timespec start, end;
+    //int err = 0;
+    //err = clock_gettime(CLOCK_REALTIME, &start);
     cout << "start Compression\n";
 
     float* ot_val; cudaMalloc(&ot_val, r2 * r1 * sizeof(float) / 5);

@@ -115,7 +115,7 @@ __global__ void KERNEL_CUHIP_prototype_c_lorenzo_2d1l__eb_list(
   };
 
   auto id = gid2();
-#warning "change to the real eb_list"
+  
   if (check_boundary2()) { 
     auto ebx2_r = 0.5 / eb_list[id];
     data(0, 0) = round(in_data[id] *  ebx2_r); 
@@ -126,7 +126,7 @@ __global__ void KERNEL_CUHIP_prototype_c_lorenzo_2d1l__eb_list(
                           (y > 0 ? data(0, -1) : 0) -             // dist=1
                           (x > 0 and y > 0 ? data(-1, -1) : 0));  // dist=2
 
-  bool quantizable = fabs(delta) < radius;
+  bool quantizable = (fabs(delta) < radius);
   T candidate = delta + radius;
   if (check_boundary2()) {
     out_eq[id] = quantizable * static_cast<Eq>(candidate);
