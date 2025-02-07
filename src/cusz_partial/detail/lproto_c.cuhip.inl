@@ -114,7 +114,7 @@ __global__ void KERNEL_CUHIP_prototype_c_lorenzo_2d1l__eb_list(
   };
 
   auto id = gid2();
-  
+
   if (check_boundary2()) { 
     auto ebx2_r = 0.5 / eb_list[id];
     data(0, 0) = round(in_data[id] *  ebx2_r); 
@@ -129,7 +129,7 @@ __global__ void KERNEL_CUHIP_prototype_c_lorenzo_2d1l__eb_list(
   T candidate = delta + radius;
   if (check_boundary2()) {
     out_eq[id] = quantizable * static_cast<Eq>(candidate);
-    if (not quantizable) {
+    if (not quantizable|| eb_list[id] == 0) {
       auto cur_idx = atomicAdd(out_cn, 1);
       out_cidx[cur_idx] = id;
       out_cval[cur_idx] = candidate;
