@@ -62,7 +62,7 @@ inline void get_adjugate_matrix_for_position(const T x0, const T x1, const T x2,
 
 // accumulate positive and negative in (a + b + c ...)^2
 template<typename T>
-inline void accumulate_in_square(const std::vector<T>& coeff, double& positive, double& negative){
+inline void accumulate_in_square(const std::vector<T>& coeff, T& positive, T& negative){
   for(int i=0; i<coeff.size(); i++){
     for(int j=0; j<coeff.size(); j++){
       accumulate(coeff[i]*coeff[j], positive, negative);
@@ -141,9 +141,9 @@ inline double max_eb_to_keep_position_and_type(const T u0, const T u1, const T u
 			double eb1 = MINF(max_eb_to_keep_sign_2d_offline_2(u2v0, -u0v2), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u1v2, -u2v1));
 			double eb2 = MINF(max_eb_to_keep_sign_2d_offline_2(u1v2, -u2v1), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u2v0, -u0v2));
 			double eb3 = MINF(max_eb_to_keep_sign_2d_offline_2(u0v1, -u1v0), max_eb_to_keep_sign_2d_offline_4(u1v2, -u2v1, u2v0, -u0v2));
-			//double eb4 = MINF(eb3, max_eb_to_keep_sign_eigen_delta_2(u0, u1, u2, v0, v1, v2, x0, x1, x2, y0, y1, y2));
+			double eb4 = MINF(eb3, max_eb_to_keep_sign_eigen_delta_2(u0, u1, u2, v0, v1, v2, x0, x1, x2, y0, y1, y2));
 			eb = MINF(eb1, eb2);
-			eb = MINF(eb, eb3);
+			eb = MINF(eb, eb4);
 		}
 		else{
 			// no critical point
@@ -174,6 +174,7 @@ template<typename T>
 unsigned char *
 sz_compress_cp_preserve_2d_offline(const T * U, const T * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, double max_pwr_eb){
 
+	printf("work here\n");
 	size_t num_elements = r1 * r2;
 	double * eb = (double *) malloc(num_elements * sizeof(double));
 	for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
@@ -243,7 +244,7 @@ sz_compress_cp_preserve_2d_offline(const T * U, const T * V, size_t r1, size_t r
 	printf("eb_size = %ld, u_size = %ld, v_size = %ld\n", compressed_eb_size, compressed_u_size, compressed_v_size);
 	free(eb_u);
 	free(eb_v);
-	compressed_size = sizeof(int) + sizeof(size_t) + compressed_eb_size + sizeof(size_t) + compressed_u_size + sizeof(size_t) + compressed_v_size;
+	compressed_size = sizeof(int) + sizeof(size_t) + compressed_eb_size + sizeof(size_t) + compressed_u_size + sizeof(size_t) + compressed_v_size + sizeof(size_t);
 	unsigned char * compressed = (unsigned char *) malloc(compressed_size);
 	unsigned char * compressed_pos = compressed;
 	write_variable_to_dst(compressed_pos, base);

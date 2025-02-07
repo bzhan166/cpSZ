@@ -259,7 +259,7 @@ __global__ void derive_eb_offline(const T* dU, const T* dV, T* dEb, int r1, int 
 
 //version 2, enable rectangle blocksize
 template <typename T, int TileDim_X = 32, int TileDim_Y = 8>
-__global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, int r2, T max_pwr_eb){
+__global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb_U, T* dEb_V, int r1, int r2, T max_pwr_eb){
     __shared__ T buf_U[TileDim_Y][TileDim_X];
     __shared__ T buf_V[TileDim_Y][TileDim_X];
     __shared__ T per_cell_eb_L[TileDim_Y-1][TileDim_X-1];
@@ -449,7 +449,9 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
     T * eb_gpu = (T *) malloc(num_elements * sizeof(T));
     for(int i=0; i<num_elements; i++) eb_gpu[i] = max_pwr_eb;
- 
+    
+    // CPU code
+    /*
     const T * U_pos = U;
     const T * V_pos = V;
     T * eb_pos = eb;
@@ -485,18 +487,21 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         eb_pos += r2;
     }
     printf("compute eb done\n");
-    
+    */
+   
     // compression gpu
     printf("compute eb_gpu\n");   
     cudaError_t err;
 
-    T *dU, *dV, *dEb;
+    T *dU, *dV, *dEb_U, *dEb_V;
     cudaMalloc(&dU, r1 * r2 * sizeof(T));
     cudaMalloc(&dV, r1 * r2 * sizeof(T));
-    cudaMalloc(&dEb, r1 * r2 * sizeof(T));
+    cudaMalloc(&dEb_U, r1 * r2 * sizeof(T));
+    cudaMalloc(&dEb_V, r1 * r2 * sizeof(T));
     cudaMemcpy(dU, U, r1 * r2 * sizeof(T), cudaMemcpyHostToDevice);
     cudaMemcpy(dV, V, r1 * r2 * sizeof(T), cudaMemcpyHostToDevice);
-    cudaMemcpy(dEb, eb_gpu, r1 * r2 * sizeof(T), cudaMemcpyHostToDevice);
+    cudaMemcpy(dEb_U, eb_gpu, r1 * r2 * sizeof(T), cudaMemcpyHostToDevice);
+    cudaMemcpy(dEb_V, eb_gpu, r1 * r2 * sizeof(T), cudaMemcpyHostToDevice);
     
     //run kernel 1
     /*
@@ -1039,12 +1044,12 @@ int main(int argc, char ** argv){
     //err = clock_gettime(CLOCK_REALTIME, &start);
     cout << "start Compression\n";
 
-    float* ot_val_U; cudaMalloc(&ot_val_U, r2 * r1 * sizeof(float) / 2);
-    uint32_t* ot_idx_U; cudaMalloc(&ot_idx_U, r2 * r1 * sizeof(uint32_t) / 2);
+    float* ot_val_U; cudaMalloc(&ot_val_U, r2 * r1 * sizeof(float));
+    uint32_t* ot_idx_U; cudaMalloc(&ot_idx_U, r2 * r1 * sizeof(uint32_t));
     uint32_t* ot_num_U; cudaMallocManaged(&ot_num_U, sizeof(uint32_t));
 
-    float* ot_val_V; cudaMalloc(&ot_val_V, r2 * r1 * sizeof(float) / 2);
-    uint32_t* ot_idx_V; cudaMalloc(&ot_idx_V, r2 * r1 * sizeof(uint32_t) / 2);
+    float* ot_val_V; cudaMalloc(&ot_val_V, r2 * r1 * sizeof(float));
+    uint32_t* ot_idx_V; cudaMalloc(&ot_idx_V, r2 * r1 * sizeof(uint32_t));
     uint32_t* ot_num_V; cudaMallocManaged(&ot_num_V, sizeof(uint32_t));
 
     float * U_decomp = (float *) malloc(r1 * r2 * sizeof(float));

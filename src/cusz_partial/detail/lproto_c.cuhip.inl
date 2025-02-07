@@ -95,7 +95,6 @@ __global__ void KERNEL_CUHIP_prototype_c_lorenzo_2d1l(
 }
 
 
-
 template <
     typename T, int TileDim = 16, typename Eq = uint16_t,
     typename CompactVal = T, typename CompactIdx = uint32_t,
