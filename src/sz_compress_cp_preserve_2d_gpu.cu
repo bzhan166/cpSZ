@@ -693,7 +693,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     	eq_U, /*input*/dU_decomp, /*output*/dU_decomp, dim3(r2, r1, 1), dEb_U, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
     //move zero_U_data back to dU
-    thrust::scatter(thrust::device, zero_U_data, zero_U_data + *zero_eb_U_count, zero_U_indices, dU);
+    thrust::scatter(thrust::device, zero_U_data, zero_U_data + zero_eb_U_count, zero_U_indices, dU);
     
     //V
     uint16_t *eq_V;
@@ -712,7 +712,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     	eq_V, /*input*/dV_decomp, /*output*/dV_decomp, dim3(r2, r1, 1), dEb_V, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
     //move zero_V_data back to dV
-    thrust::scatter(thrust::device, zero_V_data, zero_V_data + *zero_eb_U_count, zero_V_indices, dV);
+    thrust::scatter(thrust::device, zero_V_data, zero_V_data + zero_eb_U_count, zero_V_indices, dV);
 
 
     printf("compute eq done\n");

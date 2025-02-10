@@ -88,7 +88,6 @@ void verify(Type * ori_data, Type * data, size_t num_elements){
         sum4 += (data[i] - mean2)*(data[i]-mean2);
         sum += err*err; 
     }
-    printf("sum = %f\n", sum);
     double std1 = sqrt(sum3/num_elements);
     double std2 = sqrt(sum4/num_elements);
     double ee = prodSum/num_elements;
