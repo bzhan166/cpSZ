@@ -478,12 +478,13 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         T* ot_val_U, uint32_t* ot_idx_U, uint32_t* ot_num_U, T* ot_val_V, uint32_t* ot_idx_V, uint32_t* ot_num_V, T* U_decomp, T* V_decomp){
     
     size_t num_elements = r1 * r2;
-    T * eb = (T *) malloc(num_elements * sizeof(T));
-    for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
+    //T * eb = (T *) malloc(num_elements * sizeof(T));
+    //for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
     T * eb_gpu; cudaMallocManaged(&eb_gpu, r1 * r2 * sizeof(T));
     cudaMemset(eb_gpu, max_pwr_eb, r2 * r1 * sizeof(T));
     
     // CPU code
+    /*
     const T * U_pos = U;
     const T * V_pos = V;
     T * eb_pos = eb;
@@ -534,22 +535,23 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaMemcpy(dV, V, r1 * r2 * sizeof(T), cudaMemcpyHostToDevice);
     
     //run kernel 1
+    /*
     dim3 blockSize(16, 16);
     dim3 gridSize((r2 + (blockSize.x-2) - 1) / (blockSize.x-2), (r1 + (blockSize.y-2) - 1) / (blockSize.y-2));
     printf("gridSize: %d, %d\n", gridSize.x, gridSize.y);
     derive_eb_offline<<<gridSize, blockSize>>>(dU, dV, eb_gpu, r1, r2, max_pwr_eb);
     cudaDeviceSynchronize();
     printf("compute V1 eb_gpu done\n"); 
-    
+    */
+
     //run Kernel v2:
-    /*
     dim3 blockSize_v2(32, 8, 1);
     dim3 gridSize_v2((r2 + (blockSize_v2.x-2) - 1) / (blockSize_v2.x-2), (r1 + (blockSize_v2.y-2) - 1) / (blockSize_v2.y-2));
     printf("gridSize_v2: %d, %d\n", gridSize_v2.x, gridSize_v2.y);
     derive_eb_offline_v2<<<gridSize_v2, blockSize_v2>>>(dU, dV, eb_gpu, r1, r2, max_pwr_eb);
     cudaDeviceSynchronize();
     printf("compute V2 eb_gpu done\n"); 
-    */
+    
 
     const int base = 4;
 	T log2_of_base = log2(base);
@@ -650,7 +652,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
 
     // deal with eb =zero  
     //U
-    uint32_t* d_indices; cudaMalloc(&d_indices, r1 * r2 * sizeof(uint32_t) / 2);
+    uint32_t* d_indices; cudaMalloc(&d_indices, r1 * r2 * sizeof(uint32_t));
     T* zero_U_data;
     uint32_t* zero_U_indices;
     cudaMalloc(&zero_U_data, r1 * r2 * sizeof(T) / 2);
@@ -693,7 +695,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     	eq_U, /*input*/dU_decomp, /*output*/dU_decomp, dim3(r2, r1, 1), dEb_U, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
     //move zero_U_data back to dU
-    thrust::scatter(thrust::device, zero_U_data, zero_U_data + zero_eb_U_count, zero_U_indices, dU);
+    thrust::scatter(thrust::device, zero_U_data, zero_U_data + zero_eb_U_count, zero_U_indices, dU_decomp);
     
     //V
     uint16_t *eq_V;
@@ -712,7 +714,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     	eq_V, /*input*/dV_decomp, /*output*/dV_decomp, dim3(r2, r1, 1), dEb_V, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
     //move zero_V_data back to dV
-    thrust::scatter(thrust::device, zero_V_data, zero_V_data + zero_eb_U_count, zero_V_indices, dV);
+    thrust::scatter(thrust::device, zero_V_data, zero_V_data + zero_eb_U_count, zero_V_indices, dV_decomp);
 
 
     printf("compute eq done\n");
@@ -1170,12 +1172,12 @@ int main(int argc, char ** argv){
     //err = clock_gettime(CLOCK_REALTIME, &start);
     cout << "start Compression\n";
 
-    float* ot_val_U; cudaMalloc(&ot_val_U, r2 * r1 * sizeof(float) / 2);
-    uint32_t* ot_idx_U; cudaMalloc(&ot_idx_U, r2 * r1 * sizeof(uint32_t) / 2);
+    float* ot_val_U; cudaMalloc(&ot_val_U, r2 * r1 * sizeof(float) / 5);
+    uint32_t* ot_idx_U; cudaMalloc(&ot_idx_U, r2 * r1 * sizeof(uint32_t) / 5);
     uint32_t* ot_num_U; cudaMallocManaged(&ot_num_U, sizeof(uint32_t));
 
-    float* ot_val_V; cudaMalloc(&ot_val_V, r2 * r1 * sizeof(float) / 2);
-    uint32_t* ot_idx_V; cudaMalloc(&ot_idx_V, r2 * r1 * sizeof(uint32_t) / 2);
+    float* ot_val_V; cudaMalloc(&ot_val_V, r2 * r1 * sizeof(float) / 5);
+    uint32_t* ot_idx_V; cudaMalloc(&ot_idx_V, r2 * r1 * sizeof(uint32_t) / 5);
     uint32_t* ot_num_V; cudaMallocManaged(&ot_num_V, sizeof(uint32_t));
 
     float * U_decomp = (float *) malloc(r1 * r2 * sizeof(float));
