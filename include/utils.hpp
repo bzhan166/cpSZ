@@ -56,7 +56,7 @@ void verify(Type * ori_data, Type * data, size_t num_elements){
     Max = ori_data[0];
     Min = ori_data[0];
     diffMax = fabs(data[0] - ori_data[0]);
-    size_t k = 0;
+    //size_t k = 0;
     double sum1 = 0, sum2 = 0;
     for (i = 0; i < num_elements; i++){
         sum1 += ori_data[i];
@@ -88,6 +88,7 @@ void verify(Type * ori_data, Type * data, size_t num_elements){
         sum4 += (data[i] - mean2)*(data[i]-mean2);
         sum += err*err; 
     }
+    printf("sum = %f\n", sum);
     double std1 = sqrt(sum3/num_elements);
     double std2 = sqrt(sum4/num_elements);
     double ee = prodSum/num_elements;

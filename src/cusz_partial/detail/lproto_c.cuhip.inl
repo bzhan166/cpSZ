@@ -129,7 +129,7 @@ __global__ void KERNEL_CUHIP_prototype_c_lorenzo_2d1l__eb_list(
   T candidate = delta + radius;
   if (check_boundary2()) {
     out_eq[id] = quantizable * static_cast<Eq>(candidate);
-    if (not quantizable|| eb_list[id] == 0) {
+    if (not quantizable) {
       auto cur_idx = atomicAdd(out_cn, 1);
       out_cidx[cur_idx] = id;
       out_cval[cur_idx] = candidate;
