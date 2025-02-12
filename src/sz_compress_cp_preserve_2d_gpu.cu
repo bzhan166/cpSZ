@@ -7,13 +7,13 @@
 #include "utils.hpp"
 //#include "sz_compress_3d.hpp"
 //#include "sz_compress_cp_preserve_2d.hpp"
+#include <chrono>
 #include <thrust/execution_policy.h>
 #include <thrust/scatter.h>
 #include <thrust/copy.h>
 #include <thrust/transform.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
-#include <thrust/count.h>
 
 using namespace std;
 
@@ -477,6 +477,7 @@ unsigned char *
 sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, T max_pwr_eb, 
         T* ot_val_U, uint32_t* ot_idx_U, uint32_t* ot_num_U, T* ot_val_V, uint32_t* ot_idx_V, uint32_t* ot_num_V, T* U_decomp, T* V_decomp){
     
+    auto start = std::chrono::high_resolution_clock::now();
     size_t num_elements = r1 * r2;
     //T * eb = (T *) malloc(num_elements * sizeof(T));
     //for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
@@ -520,7 +521,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         eb_pos += r2;
     }
     printf("compute eb done\n");
-    
+    */
    
     // compression gpu
     printf("compute eb_gpu\n");   
@@ -685,8 +686,24 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, uint16_t>(
     	dU, dim3(r2, r1, 1), eq_U, ot_val_U, ot_idx_U, ot_num_U, dEb_U, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
-    printf("ot_num_U : %d\n", *ot_num_U);
-    //decompression
+    //printf("ot_num_U : %d\n", *ot_num_U);   
+    //comprerssion V
+    uint16_t *eq_V;
+    cudaMalloc(&eq_V, r2 * r1 * sizeof(uint16_t));
+    cudaMemset(eq_V, 0, r2 * r1 * sizeof(uint16_t));
+    //compression kernel
+    psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, uint16_t>(
+    	dV, dim3(r2, r1, 1), eq_V, ot_val_V, ot_idx_V, ot_num_V, dEb_V, 512, &lrz_time, 0);
+    cudaDeviceSynchronize();
+    //printf("ot_num_V : %d\n", *ot_num_V);
+    
+    auto stop = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed = stop - start;
+    printf("compression time: %f s\n", elapsed.count()/1000);
+    
+
+    auto start2 = std::chrono::high_resolution_clock::now();
+    //decompression U
     T* dU_decomp; cudaMalloc(&dU_decomp, r1 * r2 * sizeof(T));
     //move ov_val to dU_decomp accrording to ot_idx
     thrust::scatter(thrust::device, ot_val_U, ot_val_U + *ot_num_U, ot_idx_U, dU_decomp);
@@ -696,16 +713,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaDeviceSynchronize();
     //move zero_U_data back to dU
     thrust::scatter(thrust::device, zero_U_data, zero_U_data + zero_eb_U_count, zero_U_indices, dU_decomp);
-    
-    //V
-    uint16_t *eq_V;
-    cudaMalloc(&eq_V, r2 * r1 * sizeof(uint16_t));
-    cudaMemset(eq_V, 0, r2 * r1 * sizeof(uint16_t));
-    psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, uint16_t>(
-    	dV, dim3(r2, r1, 1), eq_V, ot_val_V, ot_idx_V, ot_num_V, dEb_V, 512, &lrz_time, 0);
-    cudaDeviceSynchronize();
-    printf("ot_num_V : %d\n", *ot_num_V);
-    //decompression
+    //decompression V
     T* dV_decomp; cudaMalloc(&dV_decomp, r1 * r2 * sizeof(T));
     //move ov_val to dU_decomp accrording to ot_idx
     thrust::scatter(thrust::device, ot_val_V, ot_val_V + *ot_num_V, ot_idx_V, dV_decomp);
@@ -890,7 +898,10 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     free(compressed_v);
     */
 
-    free(eb);
+    //free(eb);
+    auto stop2 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed2 = stop2 - start2;
+    printf("decompression time: %f s\n", elapsed2.count()/1000);
     return 0;
 }
 
