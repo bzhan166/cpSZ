@@ -317,16 +317,15 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
     __shared__ T buf_V[TileDim_Y][TileDim_X+1];
     __shared__ T per_cell_eb_L[TileDim_Y-1][TileDim_X+1];
     __shared__ T per_cell_eb_U[TileDim_Y-1][TileDim_X+1];
-    __shared__ T buf_eb[(TileDim_Y-2) * (TileDim_X+1)];    
+    __shared__ T buf_eb[TileDim_Y-2][TileDim_X+1];    
     int row = blockIdx.y * (blockDim.y-2) + threadIdx.y; // global row index
     int col = blockIdx.x * (blockDim.x-2) + threadIdx.x; // global col index
     //int localRow = threadIdx.y; // local row index
     //int localCol = threadIdx.x; // local col index
     #define localRow threadIdx.y
     #define localCol threadIdx.x
-    int index = localRow * (TileDim_X + 1) + localCol;
 
-    buf_eb[index] = max_pwr_eb;
+    buf_eb[localRow][localCol] = max_pwr_eb;
     __syncthreads();
 
     // load data from global memory to shared memory
@@ -372,9 +371,10 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
     __syncthreads();
     */
     
+    return;
     T localmin;
     if(localRow<TileDim_Y-2 && localCol<TileDim_X-2){
-        localmin = buf_eb[index];
+        localmin = buf_eb[localRow][localCol];
         auto temp = per_cell_eb_U[localRow][localCol];
         localmin = min(localmin, temp);
         temp =  per_cell_eb_L[localRow][localCol];
@@ -388,7 +388,7 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
         temp = per_cell_eb_L[localRow+1][localCol+1];
         localmin = min(localmin, temp);
         //在这里
-        buf_eb[index] = localmin;
+        buf_eb[localRow][localCol] = localmin;
     }
     __syncthreads();
     return;
