@@ -317,14 +317,16 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
     __shared__ T buf_V[TileDim_Y][TileDim_X+1];
     __shared__ T per_cell_eb_L[TileDim_Y-1][TileDim_X+1];
     __shared__ T per_cell_eb_U[TileDim_Y-1][TileDim_X+1];
-    __shared__ T buf_eb[TileDim_Y-2][TileDim_X+1];    
+    __shared__ T buf_eb[(TileDim_Y-2) * (TileDim_X+1)];    
     int row = blockIdx.y * (blockDim.y-2) + threadIdx.y; // global row index
     int col = blockIdx.x * (blockDim.x-2) + threadIdx.x; // global col index
     //int localRow = threadIdx.y; // local row index
     //int localCol = threadIdx.x; // local col index
     #define localRow threadIdx.y
     #define localCol threadIdx.x
-    buf_eb[localRow][localCol] = max_pwr_eb;
+    int index = localRow * (TileDim_X + 1) + localCol;
+
+    buf_eb[index] = max_pwr_eb;
     __syncthreads();
 
     // load data from global memory to shared memory
@@ -372,7 +374,7 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
     
     T localmin;
     if(localRow<TileDim_Y-2 && localCol<TileDim_X-2){
-        localmin = buf_eb[localRow][localCol];
+        localmin = buf_eb[index];
         auto temp = per_cell_eb_U[localRow][localCol];
         localmin = min(localmin, temp);
         temp =  per_cell_eb_L[localRow][localCol];
@@ -386,9 +388,9 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
         temp = per_cell_eb_L[localRow+1][localCol+1];
         localmin = min(localmin, temp);
         //在这里
-        //buf_eb[localRow][localCol] = localmin;
+        buf_eb[index] = localmin;
     }
-    //__syncthreads();
+    __syncthreads();
     return;
     /*
     //For centeral part bug_check
@@ -425,6 +427,7 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
         dEb[(row+1) * r2 + (col+1)] = localmin;
     }
     __syncthreads();
+    /*
     //Edge cases
     //top edge
     if(row==0 && col < r2-2 && localRow<TileDim_Y-2 && localCol<TileDim_X-2){
@@ -496,7 +499,7 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
         dEb[(r1-1)*r2+r2-1] = buf_eb[0][0];
     } 
     __syncthreads();
-
+    */
 }
 
 // compression with pre-computed error bounds
@@ -577,34 +580,33 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaStreamCreate(&stream);
     cudaEvent_t a, b;
     cudaEventCreate(&a), cudaEventCreate(&b);
-    float ms;
+
     //run Kernel v2:
     dim3 blockSize_v2(32, 8, 1);
     dim3 gridSize_v2((r2 + (blockSize_v2.x-2) - 1) / (blockSize_v2.x-2), (r1 + (blockSize_v2.y-2) - 1) / (blockSize_v2.y-2));
     printf("gridSize_v2: %d, %d\n", gridSize_v2.x, gridSize_v2.y);
-    auto start = std::chrono::high_resolution_clock::now();
-    cudaEventRecord(a, stream);
     derive_eb_offline_v2<<<gridSize_v2, blockSize_v2, 0, stream>>>(dU, dV, eb_gpu, r1, r2, max_pwr_eb);
-    //cudaDeviceSynchronize();
-    cudaEventRecord(b, stream);
-    cudaStreamSynchronize(stream);
-    cudaEventElapsedTime(&ms, a, b);
-    auto stop = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> elapsed = stop - start;
-    //printf("derive_eb time is %f\n", elapsed/1000);
+    cudaDeviceSynchronize();
     printf("compute V2 eb_gpu done\n"); //
+    //printf("speed GiB/s: %f\n", bytes / GiB / (ms / 1000));
+    
     auto bytes = 3600 * 2400 * 4 * 2.0;
     auto GiB = 1024 * 1024 * 1024.0;
-    printf("speed GiB/s: %f\n", bytes / GiB / (ms / 1000));
-        
+    int N = 30;
     for (int i_count=0;i_count<10;i_count++){
-        cudaEventRecord(a, stream);
-        derive_eb_offline_v2<<<gridSize_v2, blockSize_v2, 0, stream>>>(dU, dV, eb_gpu, r1, r2, max_pwr_eb);
-        //cudaDeviceSynchronize();
-        cudaEventRecord(b, stream);
-        cudaStreamSynchronize(stream);
-        cudaEventElapsedTime(&ms, a, b);
-        printf("speed GiB/s: %f\n", bytes / GiB / (ms / 1000));
+        float ms = 0.0;
+        for (size_t i = 0; i < N; i++)
+        {
+            float temp;
+            cudaEventRecord(a, stream);
+            derive_eb_offline_v2<<<gridSize_v2, blockSize_v2, 0, stream>>>(dU, dV, eb_gpu, r1, r2, max_pwr_eb);
+            //cudaDeviceSynchronize();
+            cudaEventRecord(b, stream);
+            cudaStreamSynchronize(stream);
+            cudaEventElapsedTime(&temp, a, b);
+            ms+=temp;
+        }
+        printf("speed GiB/s: %f\n", bytes / GiB / (ms / N / 1000));
     }
     cudaStreamDestroy(stream);
 
@@ -762,13 +764,13 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     uint16_t *eq_U;
     cudaMalloc(&eq_U, r2 * r1 * sizeof(uint16_t));
     cudaMemset(eq_U, 0, r2 * r1 * sizeof(uint16_t));
-    start = std::chrono::high_resolution_clock::now();
+    auto start = std::chrono::high_resolution_clock::now();
     //compression kernel
     psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, uint16_t>(
     	dU, dim3(r2, r1, 1), eq_U, ot_val_U, ot_idx_U, ot_num_U, dEb_U, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
-    stop = std::chrono::high_resolution_clock::now();
-    elapsed = stop - start;
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto elapsed = stop - start;
     printf("compression U time is %f\n", elapsed.count()/1000);
     //printf("ot_num_U : %d\n", *ot_num_U);   
     //comprerssion V
@@ -842,13 +844,13 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
 
     //Compute time:
     //GPU time 
-    
+    /*
     float elapsed_time;
     cudaEvent_t beg, end;
     cudaEventCreate(&beg);
     cudaEventCreate(&end);
     size_t N=1;
-    
+    */
     //V1 GPU
     /*
     for (int i_count=0;i_count<10;i_count++){
@@ -867,7 +869,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     fflush(stdout);
     */
     //V2 GPU
-    
+    /*
     for (int i_count=0;i_count<10;i_count++){
         auto start = std::chrono::high_resolution_clock::now();
         derive_eb_offline_v2<<<gridSize_v2, blockSize_v2>>>(dU, dV, eb_gpu, r1, r2, max_pwr_eb);
@@ -878,9 +880,9 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         printf("derive_eb time is %lf, throughput is %lf GiBs\n", elapsed.count()/1000, (4*r1*r2*2.0/(elapsed.count()/1000))/(1024*1024*1024));
     }
     fflush(stdout);
-    
+    */
     //CPU time
-    
+    /*
     double t0,t1;
     for (int i_count=0;i_count<10;i_count++){
         t0=get_sec();
@@ -918,7 +920,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         t1=get_sec();
         printf("Average CPU elasped time: %f second\n", (t1-t0)/N);
     }
-    
+    */
     
     //cudaFree
     cudaFree(eb_gpu);
