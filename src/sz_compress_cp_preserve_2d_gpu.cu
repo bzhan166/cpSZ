@@ -54,6 +54,15 @@ template<typename T>
 }
 
 template<typename T>
+[[nodiscard]] constexpr inline T gpu_max_eb_to_keep_sign_2d_offline_2_degree2(const T volatile u0, const T volatile u1){
+    T positive = 0;
+    T negative = 0;
+    gpu_accumulate(u0, positive, negative);
+    gpu_accumulate(u1, positive, negative);
+    return gpu_max_eb_to_keep_sign_degree2(positive, negative);
+}
+
+template<typename T>
 [[nodiscard]] constexpr inline T max_eb_to_keep_sign_2d_offline_4(const T volatile u0, const T volatile u1, const T volatile u2, const T volatile u3, const int degree=2){
     T positive = 0;
     T negative = 0;
@@ -65,7 +74,18 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr inline double max_eb_to_keep_position_and_type(const T volatile u0, const T volatile u1, const T volatile u2, const T volatile v0, const T volatile v1, const T volatile v2, 
+[[nodiscard]] constexpr inline T gpu_max_eb_to_keep_sign_2d_offline_4_degree2(const T volatile u0, const T volatile u1, const T volatile u2, const T volatile u3){
+    T positive = 0;
+    T negative = 0;
+    gpu_accumulate(u0, positive, negative);
+    gpu_accumulate(u1, positive, negative);
+    gpu_accumulate(u2, positive, negative);
+    gpu_accumulate(u3, positive, negative);
+    return gpu_max_eb_to_keep_sign_degree2(positive, negative);
+}
+
+template<typename T>
+[[nodiscard]] constexpr inline double gpu_max_eb_to_keep_position_and_type(const T volatile u0, const T volatile u1, const T volatile u2, const T volatile v0, const T volatile v1, const T volatile v2, 
                                                                     const T x0, const T x1, const T x2, const T y0, const T y1, const T y2){//instant no use for now, future use for online 2024/12/4	
     T u0v1 = u0 * v1;
     T u1v0 = u1 * v0;
@@ -86,22 +106,23 @@ template<typename T>
             // no critical point
             eb = 0;
             if(!f1){
-                T eb_cur = MINF(max_eb_to_keep_sign_2d_offline_2(u2v0, -u0v2), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u1v2, -u2v1));
+                T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u2v0, -u0v2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u1v2, -u2v1));
                 // double eb_cur = MINF(max_eb_to_keep_sign_2(u2, u0, v2, v0), max_eb_to_keep_sign_4(u0, u1, u2, v0, v1, v2));
                 eb = MAX(eb, eb_cur);
             }
             if(!f2){
-                T eb_cur = MINF(max_eb_to_keep_sign_2d_offline_2(u1v2, -u2v1), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u2v0, -u0v2));
+                T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u1v2, -u2v1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u2v0, -u0v2));
                 // double eb_cur = MINF(max_eb_to_keep_sign_2(u1, u2, v1, v2), max_eb_to_keep_sign_4(u2, u0, u1, v2, v0, v1));
                 eb = MAX(eb, eb_cur);
             }
             if(!f3){
-                T eb_cur = MINF(max_eb_to_keep_sign_2d_offline_2(u0v1, -u1v0), max_eb_to_keep_sign_2d_offline_4(u1v2, -u2v1, u2v0, -u0v2));
+                T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u0v1, -u1v0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u1v2, -u2v1, u2v0, -u0v2));
                 // double eb_cur = MINF(max_eb_to_keep_sign_2(u0, u1, v0, v1), max_eb_to_keep_sign_4(u1, u2, u0, v1, v2, v0));
                 eb = MAX(eb, eb_cur);
             }
             // eb = MINF(eb, DEFAULT_EB);
         }
+        
     }
     return eb;
 }
@@ -292,16 +313,17 @@ __global__ void derive_eb_offline(const T* dU, const T* dV, T* dEb, int r1, int 
 //version 2, enable rectangle blocksize
 template <typename T, int TileDim_X = 32, int TileDim_Y = 8>
 __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, int r2, T max_pwr_eb){
-    __shared__ T buf_U[TileDim_Y][TileDim_X];
-    __shared__ T buf_V[TileDim_Y][TileDim_X];
-    __shared__ T per_cell_eb_L[TileDim_Y-1][TileDim_X-1];
-    __shared__ T per_cell_eb_U[TileDim_Y-1][TileDim_X-1];
-    __shared__ T buf_eb[TileDim_Y-2][TileDim_X-2];    
+    __shared__ T buf_U[TileDim_Y][TileDim_X+1];
+    __shared__ T buf_V[TileDim_Y][TileDim_X+1];
+    __shared__ T per_cell_eb_L[TileDim_Y-1][TileDim_X+1];
+    __shared__ T per_cell_eb_U[TileDim_Y-1][TileDim_X+1];
+    __shared__ T buf_eb[TileDim_Y-2][TileDim_X+1];    
     int row = blockIdx.y * (blockDim.y-2) + threadIdx.y; // global row index
     int col = blockIdx.x * (blockDim.x-2) + threadIdx.x; // global col index
-    int localRow = threadIdx.y; // local row index
-    int localCol = threadIdx.x; // local col index
-
+    //int localRow = threadIdx.y; // local row index
+    //int localCol = threadIdx.x; // local col index
+    #define localRow threadIdx.y
+    #define localCol threadIdx.x
     buf_eb[localRow][localCol] = max_pwr_eb;
     __syncthreads();
 
@@ -313,13 +335,12 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
     __syncthreads();
 
     if(localRow<TileDim_Y-1 && localCol<TileDim_X-1){
-        per_cell_eb_U[localRow][localCol] = max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow][localCol+1], buf_U[localRow+1][localCol+1],
+        per_cell_eb_U[localRow][localCol] = gpu_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow][localCol+1], buf_U[localRow+1][localCol+1],
             buf_V[localRow][localCol], buf_V[localRow][localCol+1], buf_V[localRow+1][localCol+1], static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0));
-        per_cell_eb_L[localRow][localCol] = max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow+1][localCol], buf_U[localRow+1][localCol+1],
+        per_cell_eb_L[localRow][localCol] = gpu_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow+1][localCol], buf_U[localRow+1][localCol+1],
             buf_V[localRow][localCol], buf_V[localRow+1][localCol], buf_V[localRow+1][localCol+1], static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0));
     }
     __syncthreads();
-
 
     /*
     //printf buf_U
@@ -348,17 +369,27 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
     }
     __syncthreads();
     */
-
-    if(row<r1 && col<r2 && localRow<TileDim_Y-2 && localCol<TileDim_X-2){
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow][localCol]);
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow][localCol]);
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow+1][localCol]);
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow][localCol+1]);
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow+1][localCol+1]);
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow+1][localCol+1]);
+    
+    T localmin;
+    if(localRow<TileDim_Y-2 && localCol<TileDim_X-2){
+        localmin = buf_eb[localRow][localCol];
+        auto temp = per_cell_eb_U[localRow][localCol];
+        localmin = min(localmin, temp);
+        temp =  per_cell_eb_L[localRow][localCol];
+        localmin = min(localmin, temp);
+        temp =  per_cell_eb_U[localRow+1][localCol];
+        localmin = min(localmin, temp);
+        temp = per_cell_eb_L[localRow][localCol+1];
+        localmin = min(localmin, temp);
+        temp = per_cell_eb_U[localRow+1][localCol+1];
+        localmin = min(localmin, temp);
+        temp = per_cell_eb_L[localRow+1][localCol+1];
+        localmin = min(localmin, temp);
+        //在这里
+        //buf_eb[localRow][localCol] = localmin;
     }
-    __syncthreads();
-
+    //__syncthreads();
+    return;
     /*
     //For centeral part bug_check
     if (row*r2+col == 49731) {
@@ -390,12 +421,10 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
     }
     __syncthreads();
     */
-
     if(row<r1-2 && col<r2-2 && localRow<TileDim_Y-2 && localCol<TileDim_X-2){
-        dEb[(row+1) * r2 + (col+1)] = buf_eb[localRow][localCol];
+        dEb[(row+1) * r2 + (col+1)] = localmin;
     }
     __syncthreads();
-
     //Edge cases
     //top edge
     if(row==0 && col < r2-2 && localRow<TileDim_Y-2 && localCol<TileDim_X-2){
@@ -467,7 +496,6 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
         dEb[(r1-1)*r2+r2-1] = buf_eb[0][0];
     } 
     __syncthreads();
-    
 
 }
 
@@ -477,15 +505,14 @@ unsigned char *
 sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, T max_pwr_eb, 
         T* ot_val_U, uint32_t* ot_idx_U, uint32_t* ot_num_U, T* ot_val_V, uint32_t* ot_idx_V, uint32_t* ot_num_V, T* U_decomp, T* V_decomp){
     
-    auto start = std::chrono::high_resolution_clock::now();
     size_t num_elements = r1 * r2;
-    //T * eb = (T *) malloc(num_elements * sizeof(T));
-    //for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
-    T * eb_gpu; cudaMallocManaged(&eb_gpu, r1 * r2 * sizeof(T));
+    T * eb = (T *) malloc(num_elements * sizeof(T));
+    for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
+    T * eb_gpu; cudaMalloc(&eb_gpu, r1 * r2 * sizeof(T));
     cudaMemset(eb_gpu, max_pwr_eb, r2 * r1 * sizeof(T));
     
     // CPU code
-    /*
+    
     const T * U_pos = U;
     const T * V_pos = V;
     T * eb_pos = eb;
@@ -505,7 +532,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                 auto X = (k == 0) ? X_upper : X_lower;
                 auto offset = (k == 0) ? offset_upper : offset_lower;
                 // reversed order!
-                T max_cur_eb = max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
+                T max_cur_eb = gpu_max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
                 	V_row_pos[offset[0]], V_row_pos[offset[1]], V_row_pos[offset[2]], X[0][1], X[1][1], X[2][1],
                 	X[0][0], X[1][0], X[2][0]);
                 eb_row_pos[offset[0]] = MINF(eb_row_pos[offset[0]], max_cur_eb);
@@ -521,7 +548,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         eb_pos += r2;
     }
     printf("compute eb done\n");
-    */
+    
    
     // compression gpu
     printf("compute eb_gpu\n");   
@@ -545,14 +572,68 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     printf("compute V1 eb_gpu done\n"); 
     */
 
+
+    cudaStream_t stream;
+    cudaStreamCreate(&stream);
+    cudaEvent_t a, b;
+    cudaEventCreate(&a), cudaEventCreate(&b);
+    float ms;
     //run Kernel v2:
     dim3 blockSize_v2(32, 8, 1);
     dim3 gridSize_v2((r2 + (blockSize_v2.x-2) - 1) / (blockSize_v2.x-2), (r1 + (blockSize_v2.y-2) - 1) / (blockSize_v2.y-2));
     printf("gridSize_v2: %d, %d\n", gridSize_v2.x, gridSize_v2.y);
-    derive_eb_offline_v2<<<gridSize_v2, blockSize_v2>>>(dU, dV, eb_gpu, r1, r2, max_pwr_eb);
-    cudaDeviceSynchronize();
-    printf("compute V2 eb_gpu done\n"); 
-    
+    auto start = std::chrono::high_resolution_clock::now();
+    cudaEventRecord(a, stream);
+    derive_eb_offline_v2<<<gridSize_v2, blockSize_v2, 0, stream>>>(dU, dV, eb_gpu, r1, r2, max_pwr_eb);
+    //cudaDeviceSynchronize();
+    cudaEventRecord(b, stream);
+    cudaStreamSynchronize(stream);
+    cudaEventElapsedTime(&ms, a, b);
+    auto stop = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed = stop - start;
+    //printf("derive_eb time is %f\n", elapsed/1000);
+    printf("compute V2 eb_gpu done\n"); //
+    auto bytes = 3600 * 2400 * 4 * 2.0;
+    auto GiB = 1024 * 1024 * 1024.0;
+    printf("speed GiB/s: %f\n", bytes / GiB / (ms / 1000));
+        
+    for (int i_count=0;i_count<10;i_count++){
+        cudaEventRecord(a, stream);
+        derive_eb_offline_v2<<<gridSize_v2, blockSize_v2, 0, stream>>>(dU, dV, eb_gpu, r1, r2, max_pwr_eb);
+        //cudaDeviceSynchronize();
+        cudaEventRecord(b, stream);
+        cudaStreamSynchronize(stream);
+        cudaEventElapsedTime(&ms, a, b);
+        printf("speed GiB/s: %f\n", bytes / GiB / (ms / 1000));
+    }
+    cudaStreamDestroy(stream);
+
+    //verify derive b
+    /*
+    T * eb_gpu_host = (T *) malloc(num_elements * sizeof(T));;
+    cudaMemcpy(eb_gpu_host, eb_gpu, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
+    double diff = 0.0;
+    double maxdiff = 0.0;
+    int count=0;
+    int maxdiff_index = 0;
+
+    for (int i = 0; i < r1*r2; i++){
+        diff = fabs(eb_gpu_host[i] - eb[i]);
+        if(diff > maxdiff)
+        { 
+            maxdiff = diff;
+            maxdiff_index = i;    
+        }
+        if (diff > std::numeric_limits<double>::epsilon()) {
+            //printf("error. eb_gpu_host: %5.2f, eb: %5.2f,%d\n", eb_gpu_host[i],eb[i],i);
+            //break;
+            count++;
+        }
+    }
+    printf("maxdiff: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
+    printf("eb_gpu: %f, eb: %f\n", eb_gpu_host[maxdiff_index], eb[maxdiff_index]);
+    */
+    return 0;
 
     const int base = 4;
 	T log2_of_base = log2(base);
@@ -567,7 +648,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
 		int temp_eb_v = eb_exponential_quantize(dEb_V[i], base, log2_of_base, threshold);
 		if(dEb_V[i] < threshold) dEb_V[i] = 0;
 	}
-    cudaFree(eb_gpu);
     
     //cpu eb_u, eb_v
     /*
@@ -682,35 +762,41 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     uint16_t *eq_U;
     cudaMalloc(&eq_U, r2 * r1 * sizeof(uint16_t));
     cudaMemset(eq_U, 0, r2 * r1 * sizeof(uint16_t));
+    start = std::chrono::high_resolution_clock::now();
     //compression kernel
     psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, uint16_t>(
     	dU, dim3(r2, r1, 1), eq_U, ot_val_U, ot_idx_U, ot_num_U, dEb_U, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
+    stop = std::chrono::high_resolution_clock::now();
+    elapsed = stop - start;
+    printf("compression U time is %f\n", elapsed.count()/1000);
     //printf("ot_num_U : %d\n", *ot_num_U);   
     //comprerssion V
     uint16_t *eq_V;
     cudaMalloc(&eq_V, r2 * r1 * sizeof(uint16_t));
     cudaMemset(eq_V, 0, r2 * r1 * sizeof(uint16_t));
     //compression kernel
+    start = std::chrono::high_resolution_clock::now();
     psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, uint16_t>(
     	dV, dim3(r2, r1, 1), eq_V, ot_val_V, ot_idx_V, ot_num_V, dEb_V, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
+    stop = std::chrono::high_resolution_clock::now();
+    elapsed = stop - start;
+    printf("compression V time is %lf\n", elapsed.count()/1000);
     //printf("ot_num_V : %d\n", *ot_num_V);
-    
-    auto stop = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> elapsed = stop - start;
-    printf("compression time: %f s\n", elapsed.count()/1000);
-    
 
-    auto start2 = std::chrono::high_resolution_clock::now();
     //decompression U
     T* dU_decomp; cudaMalloc(&dU_decomp, r1 * r2 * sizeof(T));
     //move ov_val to dU_decomp accrording to ot_idx
     thrust::scatter(thrust::device, ot_val_U, ot_val_U + *ot_num_U, ot_idx_U, dU_decomp);
     //decompression kernel
+    start = std::chrono::high_resolution_clock::now();
     psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
     	eq_U, /*input*/dU_decomp, /*output*/dU_decomp, dim3(r2, r1, 1), dEb_U, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
+    stop = std::chrono::high_resolution_clock::now();
+    elapsed = stop - start;
+    printf("decompression U time is %lf\n", elapsed.count()/1000);
     //move zero_U_data back to dU
     thrust::scatter(thrust::device, zero_U_data, zero_U_data + zero_eb_U_count, zero_U_indices, dU_decomp);
     //decompression V
@@ -718,9 +804,13 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     //move ov_val to dU_decomp accrording to ot_idx
     thrust::scatter(thrust::device, ot_val_V, ot_val_V + *ot_num_V, ot_idx_V, dV_decomp);
     //decompression kernel
+    start = std::chrono::high_resolution_clock::now();
     psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
     	eq_V, /*input*/dV_decomp, /*output*/dV_decomp, dim3(r2, r1, 1), dEb_V, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
+    stop = std::chrono::high_resolution_clock::now();
+    elapsed = stop - start;
+    printf("decompression V time is %lf\n", elapsed.count()/1000);
     //move zero_V_data back to dV
     thrust::scatter(thrust::device, zero_V_data, zero_V_data + zero_eb_U_count, zero_V_indices, dV_decomp);
 
@@ -729,6 +819,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("Kernel launch failed: %s\n", cudaGetErrorString(err));
+        cudaFree(eb_gpu);
         cudaFree(dU);
         cudaFree(dV);
         cudaFree(eq_U);
@@ -751,13 +842,13 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
 
     //Compute time:
     //GPU time 
-    /*
+    
     float elapsed_time;
     cudaEvent_t beg, end;
     cudaEventCreate(&beg);
     cudaEventCreate(&end);
-    size_t N=1000;
-    */
+    size_t N=1;
+    
     //V1 GPU
     /*
     for (int i_count=0;i_count<10;i_count++){
@@ -776,24 +867,20 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     fflush(stdout);
     */
     //V2 GPU
-    /*
+    
     for (int i_count=0;i_count<10;i_count++){
-        cudaEventRecord(beg);
-        for (size_t i = 0; i < N; i++)
-        {
-            derive_eb_offline_v2<<<gridSize_v2, blockSize_v2>>>(dU, dV, dEb, r1, r2, max_pwr_eb);
-        }
-        cudaEventRecord(end);
-        cudaEventSynchronize(beg);
-        cudaEventSynchronize(end);
-        cudaEventElapsedTime(&elapsed_time, beg, end);
-        elapsed_time /= 1000.;
-        printf("Average GPU_V2 elasped time: %f second\n", elapsed_time/N);
+        auto start = std::chrono::high_resolution_clock::now();
+        derive_eb_offline_v2<<<gridSize_v2, blockSize_v2>>>(dU, dV, eb_gpu, r1, r2, max_pwr_eb);
+        cudaDeviceSynchronize();
+        auto stop = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed = stop - start;
+
+        printf("derive_eb time is %lf, throughput is %lf GiBs\n", elapsed.count()/1000, (4*r1*r2*2.0/(elapsed.count()/1000))/(1024*1024*1024));
     }
     fflush(stdout);
-    */
+    
     //CPU time
-    /*
+    
     double t0,t1;
     for (int i_count=0;i_count<10;i_count++){
         t0=get_sec();
@@ -812,7 +899,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                         auto X = (k == 0) ? X_upper : X_lower;
                         auto offset = (k == 0) ? offset_upper : offset_lower;
                         // reversed order!
-                        T max_cur_eb = max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
+                        T max_cur_eb = gpu_max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
                         	V_row_pos[offset[0]], V_row_pos[offset[1]], V_row_pos[offset[2]], X[0][1], X[1][1], X[2][1],
                         	X[0][0], X[1][0], X[2][0]);
                         eb_row_pos[offset[0]] = MINF(eb_row_pos[offset[0]], max_cur_eb);
@@ -831,9 +918,10 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         t1=get_sec();
         printf("Average CPU elasped time: %f second\n", (t1-t0)/N);
     }
-    */
+    
     
     //cudaFree
+    cudaFree(eb_gpu);
     cudaFree(dU);
     cudaFree(dV);
     cudaFree(eq_U);
@@ -899,9 +987,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     */
 
     //free(eb);
-    auto stop2 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> elapsed2 = stop2 - start2;
-    printf("decompression time: %f s\n", elapsed2.count()/1000);
     return 0;
 }
 

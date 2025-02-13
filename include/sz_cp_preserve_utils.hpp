@@ -57,7 +57,6 @@ template<typename T>
     return 1;
   }
 
-
   // double c = fabs(positive - negative) / (positive + negative);
   double P = 0, N = 0;
   switch(degree){
@@ -78,7 +77,26 @@ template<typename T>
 		exit(0);
   }
   return fabs(P - N)/(P + N);
+}
 
+// maximal error bound to keep the sign of postive*(1+e)^d - negative*(1-e)^d
+template<typename T>
+[[nodiscard]] constexpr inline double gpu_max_eb_to_keep_sign_degree2(const T positive, const T negative){
+  /*
+  if((negative < 0) || (positive < 0)){
+    printf("%.4f, %.4f\n", negative, positive);
+    exit(0);
+  }
+  */
+  if((negative == 0) || (positive == 0)){
+    return 1;
+  }
+
+  // double c = fabs(positive - negative) / (positive + negative);
+  	double P = 0, N = 0;
+    P = sqrt(positive);
+    N = sqrt(negative);
+ 	return fabs(P - N)/(P + N);
 }
 
 /* ----------------------------- asqrt1 ----------------------------- */
@@ -130,6 +148,12 @@ inline float max_eb_to_keep_sign_3d_offline(const float positive, const float ne
 
 template<typename T>
 constexpr inline void accumulate(const T volatile value, T & positive, T & negative){
+	if(value >= 0) positive += value;
+	else negative += - value;
+}
+
+template<typename T>
+constexpr inline void gpu_accumulate(const T volatile value, T & positive, T & negative){
 	if(value >= 0) positive += value;
 	else negative += - value;
 }
