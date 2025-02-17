@@ -55,11 +55,13 @@ template<typename T>
 
 template<typename T>
 [[nodiscard]] constexpr inline T gpu_max_eb_to_keep_sign_2d_offline_2_degree2(const T u0, const T u1){
-    T positive = 0;
-    T negative = 0;
-    gpu_accumulate(u0, positive, negative);
-    gpu_accumulate(u1, positive, negative);
-    return gpu_max_eb_to_keep_sign_degree2(positive, negative);
+    //if(value >= 0) positive += value;
+	// else negative += - value;
+    T positive = (u0>=0 ? u0 : 0) + (u1>=0? u1 : 0);
+    T negative = (u0<0 ? -u0 : 0) + (u1<0? -u1 : 0);
+    T P = sqrt(positive);
+    T N = sqrt(negative);
+    return fabs(P - N)/(P + N);
 }
 
 template<typename T>
@@ -75,17 +77,16 @@ template<typename T>
 
 template<typename T>
 [[nodiscard]] constexpr inline T gpu_max_eb_to_keep_sign_2d_offline_4_degree2(const T u0, const T u1, const T u2, const T u3){
-    T positive = 0;
-    T negative = 0;
-    gpu_accumulate(u0, positive, negative);
-    gpu_accumulate(u1, positive, negative);
-    gpu_accumulate(u2, positive, negative);
-    gpu_accumulate(u3, positive, negative);
-    return gpu_max_eb_to_keep_sign_degree2(positive, negative);
+    T positive = (u0>=0 ? u0 : 0) + (u1>=0? u1 : 0) + (u2>=0 ? u2 : 0) + (u3>=0? u3 : 0);
+    T negative = (u0<0 ? -u0 : 0) + (u1<0? -u1 : 0) + (u2<0 ? -u2 : 0) + (u3<0? -u3 : 0);
+    T P = sqrt(positive);
+    T N = sqrt(negative);
+    return fabs(P - N)/(P + N);
 }
 
+
 template<typename T>
-[[nodiscard]] constexpr inline double gpu_max_eb_to_keep_position_and_type(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2, 
+[[nodiscard]] constexpr inline double max_eb_to_keep_position_and_type(const T volatile u0, const T volatile u1, const T volatile u2, const T volatile v0, const T volatile v1, const T volatile v2, 
                                                                     const T x0, const T x1, const T x2, const T y0, const T y1, const T y2){//instant no use for now, future use for online 2024/12/4	
     T u0v1 = u0 * v1;
     T u1v0 = u1 * v0;
@@ -106,30 +107,98 @@ template<typename T>
             // no critical point
             eb = 0;
             if(!f1){
-                T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u2v0, -u0v2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u1v2, -u2v1));
+                T eb_cur = MINF(max_eb_to_keep_sign_2d_offline_2(u2v0, -u0v2), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u1v2, -u2v1));
                 // double eb_cur = MINF(max_eb_to_keep_sign_2(u2, u0, v2, v0), max_eb_to_keep_sign_4(u0, u1, u2, v0, v1, v2));
                 eb = MAX(eb, eb_cur);
             }
             if(!f2){
-                T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u1v2, -u2v1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u2v0, -u0v2));
+                T eb_cur = MINF(max_eb_to_keep_sign_2d_offline_2(u1v2, -u2v1), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u2v0, -u0v2));
                 // double eb_cur = MINF(max_eb_to_keep_sign_2(u1, u2, v1, v2), max_eb_to_keep_sign_4(u2, u0, u1, v2, v0, v1));
                 eb = MAX(eb, eb_cur);
             }
             if(!f3){
-                T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u0v1, -u1v0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u1v2, -u2v1, u2v0, -u0v2));
+                T eb_cur = MINF(max_eb_to_keep_sign_2d_offline_2(u0v1, -u1v0), max_eb_to_keep_sign_2d_offline_4(u1v2, -u2v1, u2v0, -u0v2));
                 // double eb_cur = MINF(max_eb_to_keep_sign_2(u0, u1, v0, v1), max_eb_to_keep_sign_4(u1, u2, u0, v1, v2, v0));
                 eb = MAX(eb, eb_cur);
             }
             // eb = MINF(eb, DEFAULT_EB);
         }
-        
+    }
+    return eb;
+}
+
+template<typename T>
+[[nodiscard]] constexpr inline double gpu_max_eb_to_keep_position_and_type(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2, 
+                                                                    const T x0, const T x1, const T x2, const T y0, const T y1, const T y2){//instant no use for now, future use for online 2024/12/4
+    auto gpu_minf = [](auto a, auto b) -> T{ return (a<b)?a:b; };
+    T u0v1 = u0 * v1;
+    T u1v0 = u1 * v0;
+    T u0v2 = u0 * v2;
+    T u2v0 = u2 * v0;
+    T u1v2 = u1 * v2;
+    T u2v1 = u2 * v1;
+    T det = u0v1 - u1v0 + u1v2 - u2v1 + u2v0 - u0v2;
+    T eb = 0;
+    if(det != 0)
+    {   
+        /*
+        T d1 = u2v0 - u0v2;
+        T d2 = u1v2 - u2v1;
+        T d3 = u0v1 - u1v0;
+        bool f1 = (det / d1 >= T(1));
+        bool f2 = (det / d2 >= T(1));
+        bool f3 = (det / d3 >= T(1)); 
+        eb = 0;
+        if(!f1){
+            T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u2v0, -u0v2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u1v2, -u2v1));
+            // double eb_cur = MINF(max_eb_to_keep_sign_2(u2, u0, v2, v0), max_eb_to_keep_sign_4(u0, u1, u2, v0, v1, v2));
+            eb = MAX(eb, eb_cur);
+        }
+        if(!f2){
+            T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u1v2, -u2v1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u2v0, -u0v2));
+            // double eb_cur = MINF(max_eb_to_keep_sign_2(u1, u2, v1, v2), max_eb_to_keep_sign_4(u2, u0, u1, v2, v0, v1));
+            eb = MAX(eb, eb_cur);
+        }
+        if(!f3){;
+            T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u0v1, -u1v0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u1v2, -u2v1, u2v0, -u0v2));
+            // double eb_cur = MINF(max_eb_to_keep_sign_2(u0, u1, v0, v1), max_eb_to_keep_sign_4(u1, u2, u0, v1, v2, v0));
+            eb = MAX(eb, eb_cur);
+        }
+        // eb = MINF(eb, DEFAULT_EB);
+        */
+       bool f1 = (det / (u2v0 - u0v2) >= 1);
+       bool f2 = (det / (u1v2 - u2v1) >= 1); 
+       bool f3 = (det / (u0v1 - u1v0) >= 1); 
+       if(f1 && f2 && f3){
+           eb=0;
+       }
+       else{
+           // no critical point
+           eb = 0;
+           if(!f1){
+               T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2<float>(u2v0, -u0v2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2<float>(u0v1, -u1v0, u1v2, -u2v1));
+               // double eb_cur = MINF(max_eb_to_keep_sign_2(u2, u0, v2, v0), max_eb_to_keep_sign_4(u0, u1, u2, v0, v1, v2));
+               eb = MAX(eb, eb_cur);
+           }
+           if(!f2){
+               T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2<float>(u1v2, -u2v1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2<float>(u0v1, -u1v0, u2v0, -u0v2));
+               // double eb_cur = MINF(max_eb_to_keep_sign_2(u1, u2, v1, v2), max_eb_to_keep_sign_4(u2, u0, u1, v2, v0, v1));
+               eb = MAX(eb, eb_cur);
+           }
+           if(!f3){
+               T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2<float>(u0v1, -u1v0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2<float>(u1v2, -u2v1, u2v0, -u0v2));
+               // double eb_cur = MINF(max_eb_to_keep_sign_2(u0, u1, v0, v1), max_eb_to_keep_sign_4(u1, u2, u0, v1, v2, v0));
+               eb = MAX(eb, eb_cur);
+           }
+           // eb = MINF(eb, DEFAULT_EB);
+        }
     }
     return eb;
 }
 
 //version 2, enable rectangle blocksize
 template <typename T, int TileDim_X = 32, int TileDim_Y = 8>
-__global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, int r2, T max_pwr_eb){
+__global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restrict__ dV, T* __restrict__ dEb, int r1, int r2, T max_pwr_eb){
     __shared__ T buf_U[TileDim_Y][TileDim_X+1];
     __shared__ T buf_V[TileDim_Y][TileDim_X+1];
     __shared__ T per_cell_eb_L[TileDim_Y][TileDim_X+1];
@@ -151,8 +220,8 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
         buf_V[localRow][localCol] = dV[row * r2 + col];
     }
     __syncthreads();
-    return;
-    //在这里
+    
+    //bottleneck is here
     if(localRow<TileDim_Y-1 && localCol<TileDim_X-1){
         per_cell_eb_U[localRow][localCol] = gpu_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow][localCol+1], buf_U[localRow+1][localCol+1],
             buf_V[localRow][localCol], buf_V[localRow][localCol+1], buf_V[localRow+1][localCol+1], static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0));
@@ -160,6 +229,10 @@ __global__ void derive_eb_offline_v2(const T* dU, const T* dV, T* dEb, int r1, i
             buf_V[localRow][localCol], buf_V[localRow+1][localCol], buf_V[localRow+1][localCol+1], static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0));
     }
     __syncthreads();
+
+    /************************************记得验证对错时要删除*******************************************************/
+    //return;
+
     /*
     //printf buf_U
     if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 3 && blockIdx.y == 3) {
@@ -352,7 +425,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                 auto X = (k == 0) ? X_upper : X_lower;
                 auto offset = (k == 0) ? offset_upper : offset_lower;
                 // reversed order!
-                T max_cur_eb = gpu_max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
+                T max_cur_eb = max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
                 	V_row_pos[offset[0]], V_row_pos[offset[1]], V_row_pos[offset[2]], X[0][1], X[1][1], X[2][1],
                 	X[0][0], X[1][0], X[2][0]);
                 eb_row_pos[offset[0]] = MINF(eb_row_pos[offset[0]], max_cur_eb);
@@ -368,7 +441,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         eb_pos += r2;
     }
     printf("compute eb done\n");
-    
    
     // compression gpu
     printf("compute eb_gpu\n");   
@@ -382,15 +454,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaMemcpy(dU, U, r1 * r2 * sizeof(T), cudaMemcpyHostToDevice);
     cudaMemcpy(dV, V, r1 * r2 * sizeof(T), cudaMemcpyHostToDevice);
     
-    //run kernel 1
-    /*
-    dim3 blockSize(16, 16);
-    dim3 gridSize((r2 + (blockSize.x-2) - 1) / (blockSize.x-2), (r1 + (blockSize.y-2) - 1) / (blockSize.y-2));
-    printf("gridSize: %d, %d\n", gridSize.x, gridSize.y);
-    derive_eb_offline<<<gridSize, blockSize>>>(dU, dV, eb_gpu, r1, r2, max_pwr_eb);
-    cudaDeviceSynchronize();
-    printf("compute V1 eb_gpu done\n"); 
-    */
 
 
     cudaStream_t stream;
@@ -410,7 +473,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     auto bytes = 3600 * 2400 * 4 * 2.0;
     auto GiB = 1024 * 1024 * 1024.0;
     int N = 30;
-    for (int i_count=0;i_count<10;i_count++){
+    for (int i_count=0;i_count<3;i_count++){
         float ms = 0.0;
         for (size_t i = 0; i < N; i++)
         {
@@ -450,20 +513,18 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         }
     }
     printf("maxdiff: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
-    printf("eb_gpu: %f, eb: %f\n", eb_gpu_host[maxdiff_index], eb[maxdiff_index]);
-    
-    return 0;
+    printf("eb_gpu: %.15f, eb: %.15f\n", eb_gpu_host[maxdiff_index], eb[maxdiff_index]);
 
     const int base = 4;
 	T log2_of_base = log2(base);
 	const T threshold = std::numeric_limits<T>::epsilon();
 	for(int i=0; i<num_elements; i++){
-		dEb_U[i] = fabs(U[i]) * eb_gpu[i];
+		dEb_U[i] = fabs(U[i]) * eb_gpu_host[i];
 		int temp_eb_u = eb_exponential_quantize(dEb_U[i], base, log2_of_base, threshold);
 		if(dEb_U[i] < threshold) dEb_U[i] = 0;
 	}
 	for(int i=0; i<num_elements; i++){
-		dEb_V[i] = fabs(V[i]) * eb_gpu[i];
+		dEb_V[i] = fabs(V[i]) * eb_gpu_host[i];
 		int temp_eb_v = eb_exponential_quantize(dEb_V[i], base, log2_of_base, threshold);
 		if(dEb_V[i] < threshold) dEb_V[i] = 0;
 	}
@@ -588,7 +649,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaDeviceSynchronize();
     auto stop = std::chrono::high_resolution_clock::now();
     auto elapsed = stop - start;
-    printf("compression U time is %f\n", elapsed.count()/1000);
+    printf("compression U time is %f\n", elapsed.count()/1000.0);
     //printf("ot_num_U : %d\n", *ot_num_U);   
     //comprerssion V
     uint16_t *eq_V;
@@ -601,7 +662,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaDeviceSynchronize();
     stop = std::chrono::high_resolution_clock::now();
     elapsed = stop - start;
-    printf("compression V time is %lf\n", elapsed.count()/1000);
+    printf("compression V time is %lf\n", elapsed.count()/1000.0);
     //printf("ot_num_V : %d\n", *ot_num_V);
 
     //decompression U
@@ -615,7 +676,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaDeviceSynchronize();
     stop = std::chrono::high_resolution_clock::now();
     elapsed = stop - start;
-    printf("decompression U time is %lf\n", elapsed.count()/1000);
+    printf("decompression U time is %lf\n", elapsed.count()/1000.0);
     //move zero_U_data back to dU
     thrust::scatter(thrust::device, zero_U_data, zero_U_data + zero_eb_U_count, zero_U_indices, dU_decomp);
     //decompression V
@@ -629,7 +690,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaDeviceSynchronize();
     stop = std::chrono::high_resolution_clock::now();
     elapsed = stop - start;
-    printf("decompression V time is %lf\n", elapsed.count()/1000);
+    printf("decompression V time is %lf\n", elapsed.count()/1000.0);
     //move zero_V_data back to dV
     thrust::scatter(thrust::device, zero_V_data, zero_V_data + zero_eb_U_count, zero_V_indices, dV_decomp);
 
@@ -753,6 +814,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaFree(zero_U_indices);
     cudaFree(zero_V_data);
     cudaFree(zero_V_indices);
+    free(eb_gpu_host);
 
     //compression
     /*
