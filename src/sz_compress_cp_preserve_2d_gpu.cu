@@ -141,7 +141,6 @@ template<typename T>
     T eb = 0;
     if(det != 0)
     {   
-        /*
         T d1 = u2v0 - u0v2;
         T d2 = u1v2 - u2v1;
         T d3 = u0v1 - u1v0;
@@ -150,48 +149,21 @@ template<typename T>
         bool f3 = (det / d3 >= T(1)); 
         eb = 0;
         if(!f1){
-            T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u2v0, -u0v2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u1v2, -u2v1));
+            T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u2v0, -u0v2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u1v2, -u2v1));
             // double eb_cur = MINF(max_eb_to_keep_sign_2(u2, u0, v2, v0), max_eb_to_keep_sign_4(u0, u1, u2, v0, v1, v2));
             eb = MAX(eb, eb_cur);
         }
         if(!f2){
-            T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u1v2, -u2v1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u2v0, -u0v2));
+            T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u1v2, -u2v1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u2v0, -u0v2));
             // double eb_cur = MINF(max_eb_to_keep_sign_2(u1, u2, v1, v2), max_eb_to_keep_sign_4(u2, u0, u1, v2, v0, v1));
             eb = MAX(eb, eb_cur);
         }
         if(!f3){;
-            T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u0v1, -u1v0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u1v2, -u2v1, u2v0, -u0v2));
+            T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u0v1, -u1v0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u1v2, -u2v1, u2v0, -u0v2));
             // double eb_cur = MINF(max_eb_to_keep_sign_2(u0, u1, v0, v1), max_eb_to_keep_sign_4(u1, u2, u0, v1, v2, v0));
             eb = MAX(eb, eb_cur);
         }
         // eb = MINF(eb, DEFAULT_EB);
-        */
-       bool f1 = (det / (u2v0 - u0v2) >= 1);
-       bool f2 = (det / (u1v2 - u2v1) >= 1); 
-       bool f3 = (det / (u0v1 - u1v0) >= 1); 
-       if(f1 && f2 && f3){
-           eb=0;
-       }
-       else{
-           // no critical point
-           eb = 0;
-           if(!f1){
-               T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2<float>(u2v0, -u0v2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2<float>(u0v1, -u1v0, u1v2, -u2v1));
-               // double eb_cur = MINF(max_eb_to_keep_sign_2(u2, u0, v2, v0), max_eb_to_keep_sign_4(u0, u1, u2, v0, v1, v2));
-               eb = MAX(eb, eb_cur);
-           }
-           if(!f2){
-               T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2<float>(u1v2, -u2v1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2<float>(u0v1, -u1v0, u2v0, -u0v2));
-               // double eb_cur = MINF(max_eb_to_keep_sign_2(u1, u2, v1, v2), max_eb_to_keep_sign_4(u2, u0, u1, v2, v0, v1));
-               eb = MAX(eb, eb_cur);
-           }
-           if(!f3){
-               T eb_cur = MINF(gpu_max_eb_to_keep_sign_2d_offline_2_degree2<float>(u0v1, -u1v0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2<float>(u1v2, -u2v1, u2v0, -u0v2));
-               // double eb_cur = MINF(max_eb_to_keep_sign_2(u0, u1, v0, v1), max_eb_to_keep_sign_4(u1, u2, u0, v1, v2, v0));
-               eb = MAX(eb, eb_cur);
-           }
-           // eb = MINF(eb, DEFAULT_EB);
-        }
     }
     return eb;
 }
@@ -231,7 +203,7 @@ __global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restri
     __syncthreads();
 
     /************************************记得验证对错时要删除*******************************************************/
-    //return;
+    return;
 
     /*
     //printf buf_U
@@ -506,7 +478,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
             maxdiff = diff;
             maxdiff_index = i;    
         }
-        if (diff > std::numeric_limits<double>::epsilon()) {
+        if (diff > std::numeric_limits<float>::epsilon()) {
             //printf("error. eb_gpu_host: %5.2f, eb: %5.2f,%d\n", eb_gpu_host[i],eb[i],i);
             //break;
             count++;
