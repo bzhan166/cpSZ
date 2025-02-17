@@ -131,36 +131,46 @@ template<typename T>
 [[nodiscard]] constexpr inline double gpu_max_eb_to_keep_position_and_type(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2, 
                                                                     const T x0, const T x1, const T x2, const T y0, const T y1, const T y2){//instant no use for now, future use for online 2024/12/4
     auto gpu_minf = [](auto a, auto b) -> T{ return (a<b)?a:b; };
-    T u0v1 = u0 * v1;
-    T u1v0 = u1 * v0;
-    T u0v2 = u0 * v2;
-    T u2v0 = u2 * v0;
-    T u1v2 = u1 * v2;
-    T u2v1 = u2 * v1;
-    T det = u0v1 - u1v0 + u1v2 - u2v1 + u2v0 - u0v2;
+#define U0V1 u0*v1
+#define U1V0 u1*v0
+#define U0V2 u0*v2
+#define U2V0 u2*v0
+#define U1V2 u1*v2
+#define U2V1 u2*v1
+    //T u0v1 = u0 * v1;
+    //T u1v0 = u1 * v0;
+    //T u0v2 = u0 * v2;
+    //T u2v0 = u2 * v0;
+    //T u1v2 = u1 * v2;
+    //T u2v1 = u2 * v1;
+    //T det = u0v1 - u1v0 + u1v2 - u2v1 + u2v0 - u0v2;
+    T det = U0V1 - U1V0 + U1V2 - U2V1 + U2V0 - U0V2;
     T eb = 0;
     if(det != 0)
     {   
-        T d1 = u2v0 - u0v2;
-        T d2 = u1v2 - u2v1;
-        T d3 = u0v1 - u1v0;
+        //T d1 = u2v0 - u0v2;
+        //T d2 = u1v2 - u2v1;
+        //T d3 = u0v1 - u1v0;
+        T d1 = U2V0 - U0V2;
+        T d2 = U1V2 - U2V1;
+        T d3 = U0V1 - U1V0;
         bool f1 = (det / d1 >= T(1));
         bool f2 = (det / d2 >= T(1));
         bool f3 = (det / d3 >= T(1)); 
         eb = 0;
         if(!f1){
-            T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u2v0, -u0v2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u1v2, -u2v1));
-            // double eb_cur = MINF(max_eb_to_keep_sign_2(u2, u0, v2, v0), max_eb_to_keep_sign_4(u0, u1, u2, v0, v1, v2));
+            //T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u2v0, -u0v2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u1v2, -u2v1));
+            T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U2V0, -U0V2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U1V2, -U2V1));
             eb = MAX(eb, eb_cur);
         }
         if(!f2){
-            T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u1v2, -u2v1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u2v0, -u0v2));
-            // double eb_cur = MINF(max_eb_to_keep_sign_2(u1, u2, v1, v2), max_eb_to_keep_sign_4(u2, u0, u1, v2, v0, v1));
+            //T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u1v2, -u2v1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u2v0, -u0v2));
+            T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U1V2, -U2V1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U2V0, -U0V2));
             eb = MAX(eb, eb_cur);
         }
         if(!f3){;
-            T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u0v1, -u1v0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u1v2, -u2v1, u2v0, -u0v2));
-            // double eb_cur = MINF(max_eb_to_keep_sign_2(u0, u1, v0, v1), max_eb_to_keep_sign_4(u1, u2, u0, v1, v2, v0));
+            //T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u0v1, -u1v0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u1v2, -u2v1, u2v0, -u0v2));
+            T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U0V1, -U1V0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U1V2, -U2V1, U2V0, -U0V2));
             eb = MAX(eb, eb_cur);
         }
         // eb = MINF(eb, DEFAULT_EB);
@@ -180,8 +190,8 @@ __global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restri
     int col = blockIdx.x * (blockDim.x-2) + threadIdx.x; // global col index
     //int localRow = threadIdx.y; // local row index
     //int localCol = threadIdx.x; // local col index
-    #define localRow threadIdx.y
-    #define localCol threadIdx.x
+#define localRow threadIdx.y
+#define localCol threadIdx.x
 
     buf_eb[localRow][localCol] = max_pwr_eb;
     __syncthreads();
