@@ -81,7 +81,7 @@ template<typename T>
 
 // maximal error bound to keep the sign of postive*(1+e)^d - negative*(1-e)^d
 template<typename T>
-[[nodiscard]] constexpr inline double gpu_max_eb_to_keep_sign_degree2(const T positive, const T negative){
+[[nodiscard]] constexpr inline T gpu_max_eb_to_keep_sign_degree2(const T positive, const T negative){
   /*
   if((negative < 0) || (positive < 0)){
     printf("%.4f, %.4f\n", negative, positive);
@@ -93,7 +93,7 @@ template<typename T>
   }
 
   // double c = fabs(positive - negative) / (positive + negative);
-  	double P = 0, N = 0;
+  	T P = 0, N = 0;
     P = sqrt(positive);
     N = sqrt(negative);
  	return fabs(P - N)/(P + N);
