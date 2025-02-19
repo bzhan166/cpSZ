@@ -525,20 +525,19 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     int count=0;
     int maxdiff_index = 0;
     
-    for (int i = 0; i < r1*r2; i++){
-        if(eb_u_gpu[i]==0){
-            continue;
-        }
-        diff = fabs(eb_u_gpu[i] - eb_u[i]);
-        if(diff > maxdiff)
-        { 
-            maxdiff = diff;
-            maxdiff_index = i;    
-        }
-        if (diff > std::numeric_limits<float>::epsilon()) {
-            //printf("error. eb_u_gpu: %5.2f, eb_u: %5.2f,%d\n", eb_u_gpu[i],eb_u[i],i);
-            //break;
-            count++;
+    for (int i = 1; i < r1-1; i++){
+        for(int j = 1; j < r2-1; j++){
+            diff = fabs(eb_u_gpu[i] - eb_u[i]);
+            if(diff > maxdiff)
+            { 
+                maxdiff = diff;
+                maxdiff_index = i;    
+            }
+            if (diff > std::numeric_limits<float>::epsilon()) {
+                //printf("error. eb_u_gpu: %5.2f, eb_u: %5.2f,%d\n", eb_u_gpu[i],eb_u[i],i);
+                //break;
+                count++;
+            }
         }
     }
     printf("maxdiff: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
@@ -548,21 +547,19 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     maxdiff = 0.0;
     count=0;
     maxdiff_index = 0;
-
-    for (int i = 0; i < r1*r2; i++){
-        if(eb_v_gpu[i]==0){
-            continue;
-        }
-        diff = fabs(eb_v_gpu[i] - eb_v[i]);
-        if(diff > maxdiff)
-        { 
-            maxdiff = diff;
-            maxdiff_index = i;    
-        }
-        if (diff > std::numeric_limits<float>::epsilon()) {
-            //printf("error. eb_v_gpu: %5.2f, eb_v: %5.2f,%d\n", eb_u_gpu[i],eb_v[i],i);
-            //break;
-            count++;
+    for (int i = 1; i < r1-1; i++){
+        for(int j = 1; j < r2-1; j++){
+            diff = fabs(eb_v_gpu[i] - eb_v[i]);
+            if(diff > maxdiff)
+            { 
+                maxdiff = diff;
+                maxdiff_index = i;    
+            }
+            if (diff > std::numeric_limits<float>::epsilon()) {
+                //printf("error. eb_u_gpu: %5.2f, eb_u: %5.2f,%d\n", eb_u_gpu[i],eb_u[i],i);
+                //break;
+                count++;
+            }
         }
     }
     printf("maxdiff: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
