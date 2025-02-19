@@ -193,6 +193,57 @@ __global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restri
 #define localRow threadIdx.y
 #define localCol threadIdx.x
 
+
+    constexpr auto gpulambda_max_eb_to_keep_sign_2d_offline_2_degree2 = [](const T u0, const T u1) -> T {
+        T positive = (u0>=0 ? u0 : 0) + (u1>=0? u1 : 0);
+        T negative = (u0<0 ? -u0 : 0) + (u1<0? -u1 : 0);
+        T P = sqrt(positive);
+        T N = sqrt(negative);
+        return fabs(P - N)/(P + N);
+    };
+
+
+    constexpr auto gpulambda_max_eb_to_keep_sign_2d_offline_4_degree2 = [](const T u0, const T u1, const T u2, const T u3) -> T {
+        T positive = (u0>=0 ? u0 : 0) + (u1>=0? u1 : 0) + (u2>=0 ? u2 : 0) + (u3>=0? u3 : 0);
+        T negative = (u0<0 ? -u0 : 0) + (u1<0? -u1 : 0) + (u2<0 ? -u2 : 0) + (u3<0? -u3 : 0);
+        T P = sqrt(positive);
+        T N = sqrt(negative);
+        return fabs(P - N)/(P + N);
+    };
+
+    constexpr auto gpulambda_minf = [](auto a, auto b) -> T { return (a < b) ? a : b; };
+    auto gpulambda_max_eb_to_keep_position_and_type = [&](const T u0, const T u1, const T u2, const T v0, const T v1, const T v2, const T x0, const T x1, const T x2, const T y0, const T y1, const T y2) -> double {
+                                                                    //instant no use for now, future use for online 2024/12/4
+#define U0V1 u0*v1
+#define U1V0 u1*v0
+#define U0V2 u0*v2
+#define U2V0 u2*v0
+#define U1V2 u1*v2
+#define U2V1 u2*v1
+
+        T d1 = U2V0 - U0V2, d2 = U1V2 - U2V1, d3 = U0V1 - U1V0;
+        T det = d1 + d2 + d3;
+        T eb = 0;
+        if(det != 0)
+        {   
+            eb = 0;
+            if (not (det / d1 >= T(1)) ) {
+                T eb_cur = gpulambda_minf(gpulambda_max_eb_to_keep_sign_2d_offline_2_degree2(U2V0, -U0V2), gpulambda_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U1V2, -U2V1));
+                eb = MAX(eb, eb_cur);
+            }
+            if (not (det / d2 >= T(1)) ){
+                T eb_cur = gpulambda_minf(gpulambda_max_eb_to_keep_sign_2d_offline_2_degree2(U1V2, -U2V1), gpulambda_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U2V0, -U0V2));
+                eb = MAX(eb, eb_cur);
+            }
+            if (not (det / d3 >= T(1)) ){
+                T eb_cur = gpulambda_minf(gpulambda_max_eb_to_keep_sign_2d_offline_2_degree2(U0V1, -U1V0), gpulambda_max_eb_to_keep_sign_2d_offline_4_degree2(U1V2, -U2V1, U2V0, -U0V2));
+                eb = MAX(eb, eb_cur);
+            }
+        }
+        return eb;
+    };
+
+
     buf_eb[localRow][localCol] = max_pwr_eb;
     __syncthreads();
 
@@ -205,9 +256,9 @@ __global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restri
     
     //bottleneck is here
     if(localRow<TileDim_Y-1 && localCol<TileDim_X-1){
-        per_cell_eb_U[localRow][localCol] = gpu_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow][localCol+1], buf_U[localRow+1][localCol+1],
+        per_cell_eb_U[localRow][localCol] = gpulambda_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow][localCol+1], buf_U[localRow+1][localCol+1],
             buf_V[localRow][localCol], buf_V[localRow][localCol+1], buf_V[localRow+1][localCol+1], static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0));
-        per_cell_eb_L[localRow][localCol] = gpu_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow+1][localCol], buf_U[localRow+1][localCol+1],
+        per_cell_eb_L[localRow][localCol] = gpulambda_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow+1][localCol], buf_U[localRow+1][localCol+1],
             buf_V[localRow][localCol], buf_V[localRow+1][localCol], buf_V[localRow+1][localCol+1], static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0),  static_cast<T>(0));
     }
     __syncthreads();
