@@ -498,7 +498,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     
     for (int i = 1; i < r1-1; i++){
         for(int j = 1; j < r2-1; j++){
-            diff = fabs(eb_u_gpu[i] - eb_u[i]);
+            diff = fabs(eb_u_gpu[i*r2+j] - eb_u[i*r2+j]);
             if(diff > maxdiff)
             { 
                 maxdiff = diff;
@@ -520,7 +520,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     maxdiff_index = 0;
     for (int i = 1; i < r1-1; i++){
         for(int j = 1; j < r2-1; j++){
-            diff = fabs(eb_v_gpu[i] - eb_v[i]);
+            diff = fabs(eb_v_gpu[i*r2+j] - eb_v[i*r2+j]);
             if(diff > maxdiff)
             { 
                 maxdiff = diff;
