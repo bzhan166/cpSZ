@@ -264,7 +264,7 @@ __global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restri
     __syncthreads();
 
     /************************************记得验证对错时要删除*******************************************************/
-    return;
+    //return;
 
     /*
     //printf buf_U
@@ -366,87 +366,6 @@ __global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restri
         dEb_V[row * r2 + col] = 0;
     }
     __syncthreads();
-    /*
-    //Edge cases
-    //top edge
-    if(row==0 && col < r2-2 && localRow<TileDim_Y-2 && localCol<TileDim_X-2){
-        buf_eb[0][localCol] = max_pwr_eb;
-        buf_eb[0][localCol] = min(per_cell_eb_U[localRow][localCol], buf_eb[0][localCol]);
-        buf_eb[0][localCol] = min(per_cell_eb_U[localRow][localCol+1], buf_eb[0][localCol]);
-        buf_eb[0][localCol] = min(per_cell_eb_L[localRow][localCol+1], buf_eb[0][localCol]);
-        dEb_U[col+1] = buf_eb[0][localCol] * buf_U[0][localCol+1];
-        dEb_V[col+1] = buf_eb[0][localCol] * buf_V[0][localCol+1];
-    }
-    __syncthreads();
-
-    //bottom edge
-    if(row==r1-1 && col < r2-2 && localRow<TileDim_Y-2 && localCol<TileDim_X-2){
-        buf_eb[0][localCol] = max_pwr_eb;
-        buf_eb[0][localCol] = min(per_cell_eb_U[localRow-1][localCol], buf_eb[0][localCol]);
-        buf_eb[0][localCol] = min(per_cell_eb_L[localRow-1][localCol], buf_eb[0][localCol]);
-        buf_eb[0][localCol] = min(per_cell_eb_L[localRow-1][localCol+1], buf_eb[0][localCol]);
-        dEb_U[row*r2 + col+1] = buf_eb[0][localCol] * buf_U[localRow][localCol+1];
-        dEb_V[row*r2 + col+1] = buf_eb[0][localCol] * buf_V[localRow][localCol+1];
-    }
-    __syncthreads();
-
-    //left edge
-    if(col==0 && row < r1-2 && localRow<TileDim_Y-2 && localCol<TileDim_X-2){
-        buf_eb[localRow][0] = max_pwr_eb;
-        buf_eb[localRow][0] = min(per_cell_eb_L[localRow][localCol], buf_eb[localRow][0]);
-        buf_eb[localRow][0] = min(per_cell_eb_U[localRow+1][localCol], buf_eb[localRow][0]);
-        buf_eb[localRow][0] = min(per_cell_eb_L[localRow+1][localCol], buf_eb[localRow][0]);
-        dEb_U[(row+1)*r2] = buf_eb[localRow][0] * buf_U[localRow+1][0];
-        dEb_V[(row+1)*r2] = buf_eb[localRow][0] * buf_V[localRow+1][0];
-    }
-   __syncthreads();
-
-    //right edge
-    if(row < r1-2 && col==r2-1 && localRow<TileDim_Y-2 && localCol<TileDim_X-2){
-        buf_eb[localRow][0] = max_pwr_eb;
-        buf_eb[localRow][0] = min(per_cell_eb_L[localRow][localCol-1], buf_eb[localRow][0]);
-        buf_eb[localRow][0] = min(per_cell_eb_U[localRow][localCol-1], buf_eb[localRow][0]);
-        buf_eb[localRow][0] = min(per_cell_eb_U[localRow+1][localCol-1], buf_eb[localRow][0]);
-        dEb_U[(row+1)*r2 + r2-1] = buf_eb[localRow][0] * buf_U[localRow+1][localCol];
-        dEb_V[(row+1)*r2 + r2-1] = buf_eb[localRow][0] * buf_V[localRow+1][localCol];
-    }
-    __syncthreads();
-
-    //top left corner
-    if(row==0&&col==0){
-        buf_eb[0][0] = max_pwr_eb;
-        buf_eb[0][0] = min(per_cell_eb_U[0][0], buf_eb[0][0]);
-        buf_eb[0][0] = min(per_cell_eb_L[0][0], buf_eb[0][0]);
-        dEb_U[0] = buf_eb[0][0]*buf_U[0][0];
-        dEb_V[0] = buf_eb[0][0]*buf_V[0][0];
-    }
-    
-    //top right corner
-    if(row==0&&col==r2-1){
-        buf_eb[0][0] = max_pwr_eb;
-        buf_eb[0][0] = min(per_cell_eb_U[0][localCol-1], buf_eb[0][0]);
-        dEb_U[col] = buf_eb[0][0]*buf_U[0][localCol];
-        dEb_V[col] = buf_eb[0][0]*buf_V[0][localCol];
-    }
-
-    //bottom left corner
-    if(row==r1-1&&col==0){
-        buf_eb[0][0] = max_pwr_eb;
-        buf_eb[0][0] = min(per_cell_eb_L[localRow-1][0], buf_eb[0][0]);
-        dEb_U[row*r2] = buf_eb[0][0]*buf_U[localRow][0];
-        dEb_V[row*r2] = buf_eb[0][0]*buf_V[localRow][0];
-    }
-
-    //bottom right corner
-    if(row==r1-1&&col==r2-1){
-        buf_eb[0][0] = max_pwr_eb;
-        buf_eb[0][0] = min(per_cell_eb_U[localRow-1][localCol-1], buf_eb[0][0]);
-        buf_eb[0][0] = min(per_cell_eb_L[localRow-1][localCol-1], buf_eb[0][0]);
-        dEb_U[row*r2 + col] = buf_eb[0][0]*buf_U[localRow][localCol];
-        dEb_V[row*r2 + col] = buf_eb[0][0]*buf_V[localRow][localCol];
-    } 
-    __syncthreads();
-    */
 }
 
 // compression with pre-computed error bounds
