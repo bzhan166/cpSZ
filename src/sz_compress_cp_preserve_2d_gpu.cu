@@ -362,7 +362,7 @@ __global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restri
     }
     __syncthreads();
     
-    if(row == 0 || col ==0 || row==r1-1 || col == r2-1){
+    if((row == 0 || col ==0 || row==r1-1 || col == r2-1)&&(row<r1-1 && col<r2-1)){
         dEb_U[row * r2 + col] = 0;
         dEb_V[row * r2 + col] = 0;
     }
