@@ -212,7 +212,7 @@ __global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restri
     };
 
     constexpr auto gpulambda_minf = [](auto a, auto b) -> T { return (a < b) ? a : b; };
-    auto gpulambda_max_eb_to_keep_position_and_type = [&](const T u0, const T u1, const T u2, const T v0, const T v1, const T v2, const T x0, const T x1, const T x2, const T y0, const T y1, const T y2) -> double {
+    auto gpulambda_max_eb_to_keep_position_and_type = [&](const T u0, const T u1, const T u2, const T v0, const T v1, const T v2, const T x0, const T x1, const T x2, const T y0, const T y1, const T y2) -> T {
                                                                     //instant no use for now, future use for online 2024/12/4
 #define U0V1 u0*v1
 #define U1V0 u1*v0
@@ -264,7 +264,7 @@ __global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restri
     __syncthreads();
 
     /************************************记得验证对错时要删除*******************************************************/
-    //return;
+    return;
 
     /*
     //printf buf_U
@@ -498,6 +498,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         eb_pos += r2;
     }
     printf("compute eb done\n");
+    
    
     // compression gpu
     printf("compute eb_gpu\n");   
