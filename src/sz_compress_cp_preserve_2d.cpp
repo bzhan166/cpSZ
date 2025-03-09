@@ -733,7 +733,7 @@ triangle mesh x0, x1, x2, derive absolute cp-preserving eb for x2 given x0, x1
 template<typename T>
 double 
 derive_cp_eb_for_positions_online_abs(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2){
-	double M0 = u2*v0 - u0*v2;
+  double M0 = u2*v0 - u0*v2;
   double M1 = u1*v2 - u2*v1;
   double M2 = u0*v1 - u1*v0;
   double M = M0 + M1 + M2;
