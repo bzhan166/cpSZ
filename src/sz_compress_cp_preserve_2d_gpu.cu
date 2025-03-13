@@ -61,8 +61,8 @@ template<typename T>
 [[nodiscard]] constexpr inline T gpu_max_eb_to_keep_sign_2d_offline_2_degree2(const T u0, const T u1){
     //if(value >= 0) positive += value;
 	// else negative += - value;
-    T positive = u0;
-    T negative = u1;
+    T positive = (u0>=0 ? u0 : 0) + (u1>=0? u1 : 0);
+    T negative = (u0<0 ? -u0 : 0) + (u1<0? -u1 : 0);
     T P = sqrt(positive);
     T N = sqrt(negative);
     return fabs(P - N)/(P + N);
@@ -81,8 +81,8 @@ template<typename T>
 
 template<typename T>
 [[nodiscard]] constexpr inline T gpu_max_eb_to_keep_sign_2d_offline_4_degree2(const T u0, const T u1, const T u2, const T u3){
-    T positive = u0+u1;
-    T negative = u2+u3;
+    T positive = (u0>=0 ? u0 : 0) + (u1>=0? u1 : 0) + (u2>=0 ? u2 : 0) + (u3>=0? u3 : 0);
+    T negative = (u0<0 ? -u0 : 0) + (u1<0? -u1 : 0) + (u2<0 ? -u2 : 0) + (u3<0? -u3 : 0);
     T P = sqrt(positive);
     T N = sqrt(negative);
     return fabs(P - N)/(P + N);
@@ -161,7 +161,6 @@ template<typename T>
         bool f1 = (det / d1 >= T(1));
         bool f2 = (det / d2 >= T(1));
         bool f3 = (det / d3 >= T(1)); 
-        eb = 0;
         if(!f1){
             //T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(u2v0, -u0v2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(u0v1, -u1v0, u1v2, -u2v1));
             T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U2V0, -U0V2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U1V2, -U2V1));
