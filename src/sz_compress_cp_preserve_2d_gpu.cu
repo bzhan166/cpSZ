@@ -176,7 +176,7 @@ template<typename T>
             T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U0V1, -U1V0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U1V2, -U2V1, U2V0, -U0V2));
             eb = MAX(eb, eb_cur);
         }
-        // eb = MINF(eb, DEFAULT_EB);
+        eb = gpu_minf(eb, 1);
     }
     return eb;
 }
@@ -311,6 +311,7 @@ __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restri
     }
     __syncthreads();
 
+    //BOTTLENECK IS HERE
     for (int i = 0; i < YSEQ; i++)
     {
         if(localRow<YSEQ*TileDim_Y-1 && localCol<TileDim_X-1){
