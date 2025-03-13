@@ -161,7 +161,8 @@ template<typename T>
         bool f1 = (det / d1 >= T(1));
         bool f2 = (det / d2 >= T(1));
         bool f3 = (det / d3 >= T(1)); 
-        if(!f1){
+        if(!f1)
+        {
             // T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U2V0, -U0V2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U1V2, -U2V1));
             
             T pos1 = (U2V0 >= 0 ? U2V0 : 0) + ((-U0V2) >= 0 ? (-U0V2) : 0);
@@ -179,7 +180,8 @@ template<typename T>
 
             eb = MAX(eb, eb_cur);
         }
-        if(!f2){
+        if(!f2)
+        {
             // T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U1V2, -U2V1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U2V0, -U0V2));
             
             T pos1 = (U1V2 >= 0 ? U1V2 : 0) + ((-U2V1) >= 0 ? (-U2V1) : 0);
@@ -197,7 +199,8 @@ template<typename T>
             
             eb = MAX(eb, eb_cur);
         }
-        if(!f3){
+        if(!f3)
+        {
             // T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U0V1, -U1V0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U1V2, -U2V1, U2V0, -U0V2));
             T pos1 = (U0V1 >= 0 ? U0V1 : 0) + ((-U1V0) >= 0 ? (-U1V0) : 0);
             T neg1 = (U0V1 < 0 ? -U0V1 : 0) + ((-U1V0) < 0 ? U1V0 : 0);
