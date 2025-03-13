@@ -61,8 +61,8 @@ template<typename T>
 [[nodiscard]] constexpr inline T gpu_max_eb_to_keep_sign_2d_offline_2_degree2(const T u0, const T u1){
     //if(value >= 0) positive += value;
 	// else negative += - value;
-    T positive = (u0>=0 ? u0 : 0) + (u1>=0? u1 : 0);
-    T negative = (u0<0 ? -u0 : 0) + (u1<0? -u1 : 0);
+    T positive = u0;
+    T negative = u1;
     T P = sqrt(positive);
     T N = sqrt(negative);
     return fabs(P - N)/(P + N);
@@ -81,8 +81,8 @@ template<typename T>
 
 template<typename T>
 [[nodiscard]] constexpr inline T gpu_max_eb_to_keep_sign_2d_offline_4_degree2(const T u0, const T u1, const T u2, const T u3){
-    T positive = (u0>=0 ? u0 : 0) + (u1>=0? u1 : 0) + (u2>=0 ? u2 : 0) + (u3>=0? u3 : 0);
-    T negative = (u0<0 ? -u0 : 0) + (u1<0? -u1 : 0) + (u2<0 ? -u2 : 0) + (u3<0? -u3 : 0);
+    T positive = u0+u1;
+    T negative = u2+u3;
     T P = sqrt(positive);
     T N = sqrt(negative);
     return fabs(P - N)/(P + N);
@@ -101,9 +101,9 @@ template<typename T>
     T det = u0v1 - u1v0 + u1v2 - u2v1 + u2v0 - u0v2;
     T eb = 0;
     if(det != 0){
-        bool f1 = (det / (u2v0 - u0v2) >= 1);
-        bool f2 = (det / (u1v2 - u2v1) >= 1); 
-        bool f3 = (det / (u0v1 - u1v0) >= 1); 
+        bool f1 = (det / (u2v0 - u0v2) >= 1);//u0v1 - u1v0 + u1v2 - u2v1>=0
+        bool f2 = (det / (u1v2 - u2v1) >= 1);//u0v1 - u1v0 + u2v0 - u0v2>=0
+        bool f3 = (det / (u0v1 - u1v0) >= 1);//u1v2 - u2v1 + u2v0 - u0v2>=0
         if(f1 && f2 && f3){
             eb=0;
         }
@@ -181,59 +181,6 @@ template<typename T>
     }
     return eb;
 }
-
-//lambda fuction
-//Lambda has some error, u and v has 15 errors for each
-/*
-    constexpr auto gpulambda_max_eb_to_keep_sign_2d_offline_2_degree2 = [](const T u0, const T u1) -> T {
-        T positive = (u0>=0 ? u0 : 0) + (u1>=0? u1 : 0);
-        T negative = (u0<0 ? -u0 : 0) + (u1<0? -u1 : 0);
-        T P = sqrt(positive);
-        T N = sqrt(negative);
-        return fabs(P - N)/(P + N);
-    };
-
-
-    constexpr auto gpulambda_max_eb_to_keep_sign_2d_offline_4_degree2 = [](const T u0, const T u1, const T u2, const T u3) -> T {
-        T positive = (u0>=0 ? u0 : 0) + (u1>=0? u1 : 0) + (u2>=0 ? u2 : 0) + (u3>=0? u3 : 0);
-        T negative = (u0<0 ? -u0 : 0) + (u1<0? -u1 : 0) + (u2<0 ? -u2 : 0) + (u3<0? -u3 : 0);
-        T P = sqrt(positive);
-        T N = sqrt(negative);
-        return fabs(P - N)/(P + N);
-    };
-
-    constexpr auto gpulambda_minf = [](auto a, auto b) -> T { return (a < b) ? a : b; };
-    auto gpulambda_max_eb_to_keep_position_and_type = [&](const T u0, const T u1, const T u2, const T v0, const T v1, const T v2, const T x0, const T x1, const T x2, const T y0, const T y1, const T y2) -> T {
-                                                                    //instant no use for now, future use for online 2024/12/4
-#define U0V1 u0*v1
-#define U1V0 u1*v0
-#define U0V2 u0*v2
-#define U2V0 u2*v0
-#define U1V2 u1*v2
-#define U2V1 u2*v1
-
-        T d1 = U2V0 - U0V2, d2 = U1V2 - U2V1, d3 = U0V1 - U1V0;
-        T det = d1 + d2 + d3;
-        T eb = 0;
-        if(det != 0)
-        {   
-            eb = 0;
-            if (not (det / d1 >= T(1)) ) {
-                T eb_cur = gpulambda_minf(gpulambda_max_eb_to_keep_sign_2d_offline_2_degree2(U2V0, -U0V2), gpulambda_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U1V2, -U2V1));
-                eb = MAX(eb, eb_cur);
-            }
-            if (not (det / d2 >= T(1)) ){
-                T eb_cur = gpulambda_minf(gpulambda_max_eb_to_keep_sign_2d_offline_2_degree2(U1V2, -U2V1), gpulambda_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U2V0, -U0V2));
-                eb = MAX(eb, eb_cur);
-            }
-            if (not (det / d3 >= T(1)) ){
-                T eb_cur = gpulambda_minf(gpulambda_max_eb_to_keep_sign_2d_offline_2_degree2(U0V1, -U1V0), gpulambda_max_eb_to_keep_sign_2d_offline_4_degree2(U1V2, -U2V1, U2V0, -U0V2));
-                eb = MAX(eb, eb_cur);
-            }
-        }
-        return eb;
-    };
-*/
 
 //version 2, enable rectangle blocksize
 template <typename T, int TileDim_X = BLOCKSIZE_X, int TileDim_Y = BLOCKSIZE_Y>
@@ -426,6 +373,7 @@ __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restri
     }
 }
 
+//正确性有问题
 //version 4, single thread muti-compute TileDim_X*(TileDim_Y*NUM_PRE_THREAD) data mapto TileDim_X*TileDim_Y with private buffer
 template <typename T, int TileDim_X = BLOCKSIZE_X, int TileDim_Y = BLOCKSIZE_Y, int YSEQ = NUM_PRE_THREAD>
 __global__ void derive_eb_offline_v4(const T* __restrict__ dU, const T* __restrict__ dV, T* __restrict__ dEb, T* __restrict__  dEb_U,  T* __restrict__ dEb_V, int r1, int r2, T max_pwr_eb){
@@ -709,32 +657,32 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaStreamDestroy(stream);
 
     //run Kernel v4:
-    dim3 blockSize_v4(BLOCKSIZE_X, BLOCKSIZE_Y, 1);
-    dim3 gridSize_v4((r2 + (blockSize_v4.x-2) - 1) / (blockSize_v4.x-2), (r1 + (blockSize_v4.y*NUM_PRE_THREAD-2)-1) / (blockSize_v4.y*NUM_PRE_THREAD-2));
-    printf("gridSize_v4: %d, %d\n", gridSize_v4.x, gridSize_v4.y);
-    derive_eb_offline_v4<<<gridSize_v4, blockSize_v4>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
-    cudaDeviceSynchronize();
-    printf("compute V4 eb_gpu done\n"); //
-    //printf("speed GiB/s: %f\n", bytes / GiB / (ms / 1000));
+    // dim3 blockSize_v4(BLOCKSIZE_X, BLOCKSIZE_Y, 1);
+    // dim3 gridSize_v4((r2 + (blockSize_v4.x-2) - 1) / (blockSize_v4.x-2), (r1 + (blockSize_v4.y*NUM_PRE_THREAD-2)-1) / (blockSize_v4.y*NUM_PRE_THREAD-2));
+    // printf("gridSize_v4: %d, %d\n", gridSize_v4.x, gridSize_v4.y);
+    // derive_eb_offline_v4<<<gridSize_v4, blockSize_v4>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
+    // cudaDeviceSynchronize();
+    // printf("compute V4 eb_gpu done\n"); //
+    // //printf("speed GiB/s: %f\n", bytes / GiB / (ms / 1000));
 
-    cudaStreamCreate(&stream);
-    cudaEventCreate(&a), cudaEventCreate(&b);
-    for (int i_count=0;i_count<3;i_count++){
-        float ms = 0.0;
-        for (size_t i = 0; i < N; i++)
-        {
-            float temp;
-            cudaEventRecord(a, stream);
-            derive_eb_offline_v4<<<gridSize_v4, blockSize_v4, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
-            //cudaDeviceSynchronize();
-            cudaEventRecord(b, stream);
-            cudaStreamSynchronize(stream);
-            cudaEventElapsedTime(&temp, a, b);
-            ms+=temp;
-        }
-        printf("elasped time is %f ms, V4 speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
-    }
-    cudaStreamDestroy(stream); 
+    // cudaStreamCreate(&stream);
+    // cudaEventCreate(&a), cudaEventCreate(&b);
+    // for (int i_count=0;i_count<3;i_count++){
+    //     float ms = 0.0;
+    //     for (size_t i = 0; i < N; i++)
+    //     {
+    //         float temp;
+    //         cudaEventRecord(a, stream);
+    //         derive_eb_offline_v4<<<gridSize_v4, blockSize_v4, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
+    //         //cudaDeviceSynchronize();
+    //         cudaEventRecord(b, stream);
+    //         cudaStreamSynchronize(stream);
+    //         cudaEventElapsedTime(&temp, a, b);
+    //         ms+=temp;
+    //     }
+    //     printf("elasped time is %f ms, V4 speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
+    // }
+    // cudaStreamDestroy(stream); 
 
     //verify derive_eb
     
@@ -771,7 +719,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
             if(diff > maxdiff)
             { 
                 maxdiff = diff;
-                maxdiff_index = i;    
+                maxdiff_index = i*r2+j;    
             }
             if (diff > std::numeric_limits<float>::epsilon()) {
                 //printf("error. eb_u_gpu: %5.2f, eb_u: %5.2f,%d\n", eb_u_gpu[i],eb_u[i],i);
@@ -793,7 +741,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
             if(diff > maxdiff)
             { 
                 maxdiff = diff;
-                maxdiff_index = i;    
+                maxdiff_index = i*r2+j;    
             }
             if (diff > std::numeric_limits<float>::epsilon()) {
                 //printf("error. eb_u_gpu: %5.2f, eb_u: %5.2f,%d\n", eb_u_gpu[i],eb_u[i],i);
