@@ -150,7 +150,7 @@ template<typename T>
     //T det = u0v1 - u1v0 + u1v2 - u2v1 + u2v0 - u0v2;
     T det = U0V1 - U1V0 + U1V2 - U2V1 + U2V0 - U0V2;
     T eb = 0;
-    if(det != 0)
+    //if(det != 0)
     {   
         //T d1 = u2v0 - u0v2;
         //T d2 = u1v2 - u2v1;
@@ -161,7 +161,7 @@ template<typename T>
         bool f1 = (det / d1 >= T(1));
         bool f2 = (det / d2 >= T(1));
         bool f3 = (det / d3 >= T(1)); 
-        if(!f1)
+        //if(!f1)
         {
             // T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U2V0, -U0V2), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U1V2, -U2V1));
             
@@ -180,43 +180,43 @@ template<typename T>
 
             eb = MAX(eb, eb_cur);
         }
-        if(!f2)
-        {
-            // T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U1V2, -U2V1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U2V0, -U0V2));
+        // if(!f2)
+        // {
+        //     // T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U1V2, -U2V1), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U0V1, -U1V0, U2V0, -U0V2));
             
-            T pos1 = (U1V2 >= 0 ? U1V2 : 0) + ((-U2V1) >= 0 ? (-U2V1) : 0);
-            T neg1 = (U1V2 < 0 ? -U1V2 : 0) + ((-U2V1) < 0 ? U2V1 : 0);
-            T P1 = sqrt(pos1);
-            T N1 = sqrt(neg1);
-            T res1 = fabs(P1 - N1) / (P1 + N1);
+        //     T pos1 = (U1V2 >= 0 ? U1V2 : 0) + ((-U2V1) >= 0 ? (-U2V1) : 0);
+        //     T neg1 = (U1V2 < 0 ? -U1V2 : 0) + ((-U2V1) < 0 ? U2V1 : 0);
+        //     T P1 = sqrt(pos1);
+        //     T N1 = sqrt(neg1);
+        //     T res1 = fabs(P1 - N1) / (P1 + N1);
 
-            T pos2 = (U0V1 >= 0 ? U0V1 : 0) + ((-U1V0) >= 0 ? (-U1V0) : 0) + (U2V0 >= 0 ? U2V0 : 0) + ((-U0V2) >= 0 ? (-U0V2) : 0);
-            T neg2 = (U0V1 < 0 ? -U0V1 : 0) + ((-U1V0) < 0 ? U1V0 : 0) + (U2V0 < 0 ? -U2V0 : 0) + ((-U0V2) < 0 ? U0V2 : 0);
-            T P2 = sqrt(pos2);
-            T N2 = sqrt(neg2);
-            T res2 = fabs(P2 - N2) / (P2 + N2);
-            T eb_cur = gpu_minf(res1, res2);
+        //     T pos2 = (U0V1 >= 0 ? U0V1 : 0) + ((-U1V0) >= 0 ? (-U1V0) : 0) + (U2V0 >= 0 ? U2V0 : 0) + ((-U0V2) >= 0 ? (-U0V2) : 0);
+        //     T neg2 = (U0V1 < 0 ? -U0V1 : 0) + ((-U1V0) < 0 ? U1V0 : 0) + (U2V0 < 0 ? -U2V0 : 0) + ((-U0V2) < 0 ? U0V2 : 0);
+        //     T P2 = sqrt(pos2);
+        //     T N2 = sqrt(neg2);
+        //     T res2 = fabs(P2 - N2) / (P2 + N2);
+        //     T eb_cur = gpu_minf(res1, res2);
             
-            eb = MAX(eb, eb_cur);
-        }
-        if(!f3)
-        {
-            // T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U0V1, -U1V0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U1V2, -U2V1, U2V0, -U0V2));
-            T pos1 = (U0V1 >= 0 ? U0V1 : 0) + ((-U1V0) >= 0 ? (-U1V0) : 0);
-            T neg1 = (U0V1 < 0 ? -U0V1 : 0) + ((-U1V0) < 0 ? U1V0 : 0);
-            T P1 = sqrt(pos1);
-            T N1 = sqrt(neg1);
-            T res1 = fabs(P1 - N1) / (P1 + N1);
+        //     eb = MAX(eb, eb_cur);
+        // }
+        // if(!f3)
+        // {
+        //     // T eb_cur = gpu_minf(gpu_max_eb_to_keep_sign_2d_offline_2_degree2(U0V1, -U1V0), gpu_max_eb_to_keep_sign_2d_offline_4_degree2(U1V2, -U2V1, U2V0, -U0V2));
+        //     T pos1 = (U0V1 >= 0 ? U0V1 : 0) + ((-U1V0) >= 0 ? (-U1V0) : 0);
+        //     T neg1 = (U0V1 < 0 ? -U0V1 : 0) + ((-U1V0) < 0 ? U1V0 : 0);
+        //     T P1 = sqrt(pos1);
+        //     T N1 = sqrt(neg1);
+        //     T res1 = fabs(P1 - N1) / (P1 + N1);
 
-            T pos2 = (U1V2 >= 0 ? U1V2 : 0) + ((-U2V1) >= 0 ? (-U2V1) : 0) + (U2V0 >= 0 ? U2V0 : 0) + ((-U0V2) >= 0 ? (-U0V2) : 0);
-            T neg2 = (U1V2 < 0 ? -U1V2 : 0) + ((-U2V1) < 0 ? U2V1 : 0) + (U2V0 < 0 ? -U2V0 : 0) + ((-U0V2) < 0 ? U0V2 : 0);
-            T P2 = sqrt(pos2);
-            T N2 = sqrt(neg2);
-            T res2 = fabs(P2 - N2) / (P2 + N2);
-            T eb_cur = gpu_minf(res1, res2);
+        //     T pos2 = (U1V2 >= 0 ? U1V2 : 0) + ((-U2V1) >= 0 ? (-U2V1) : 0) + (U2V0 >= 0 ? U2V0 : 0) + ((-U0V2) >= 0 ? (-U0V2) : 0);
+        //     T neg2 = (U1V2 < 0 ? -U1V2 : 0) + ((-U2V1) < 0 ? U2V1 : 0) + (U2V0 < 0 ? -U2V0 : 0) + ((-U0V2) < 0 ? U0V2 : 0);
+        //     T P2 = sqrt(pos2);
+        //     T N2 = sqrt(neg2);
+        //     T res2 = fabs(P2 - N2) / (P2 + N2);
+        //     T eb_cur = gpu_minf(res1, res2);
 
-            eb = MAX(eb, eb_cur);
-        }
+        //     eb = MAX(eb, eb_cur);
+        // }
         eb = gpu_minf(eb, 1);
     }
     return eb;
@@ -362,7 +362,7 @@ __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restri
         
     }
     __syncthreads();
-
+    return ;
     T localmin;
     for (int i = 0; i < YSEQ; i++)
     {
