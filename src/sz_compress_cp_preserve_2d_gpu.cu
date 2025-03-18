@@ -222,109 +222,6 @@ template<typename T>
     return eb;
 }
 
-//version 2, enable rectangle blocksize
-template <typename T, int TileDim_X = BLOCKSIZE_X, int TileDim_Y = BLOCKSIZE_Y>
-__global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restrict__ dV, T* __restrict__ dEb, T* __restrict__  dEb_U,  T* __restrict__ dEb_V, int r1, int r2, T max_pwr_eb){
-    __shared__ T buf_U[TileDim_Y][TileDim_X+1];
-    __shared__ T buf_V[TileDim_Y][TileDim_X+1];
-    __shared__ T per_cell_eb_L[TileDim_Y][TileDim_X+1];
-    __shared__ T per_cell_eb_U[TileDim_Y][TileDim_X+1];    
-    int row = blockIdx.y * (blockDim.y-2) + threadIdx.y; // global row index
-    int col = blockIdx.x * (blockDim.x-2) + threadIdx.x; // global col index
-    int localRow = threadIdx.y; // local row index
-    int localCol = threadIdx.x; // local col index
-    //#define localRow threadIdx.y
-    //#define localCol threadIdx.x
-
-    T localmin = max_pwr_eb;
-
-    // load data from global memory to shared memory
-    if(row < r1 && col < r2){
-        buf_U[localRow][localCol] = dU[row * r2 + col];
-        buf_V[localRow][localCol] = dV[row * r2 + col];
-    }
-    __syncthreads();
-    //bottleneck is here
-    //Lambda has some error, u and v has 15 errors for each
-    if(localRow<TileDim_Y-1 && localCol<TileDim_X-1){
-        per_cell_eb_U[localRow][localCol] = gpu_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow][localCol+1], buf_U[localRow+1][localCol+1],
-            buf_V[localRow][localCol], buf_V[localRow][localCol+1], buf_V[localRow+1][localCol+1]);
-        per_cell_eb_L[localRow][localCol] = gpu_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow+1][localCol], buf_U[localRow+1][localCol+1],
-            buf_V[localRow][localCol], buf_V[localRow+1][localCol], buf_V[localRow+1][localCol+1]);
-    }
-    __syncthreads();
-
-    if(localRow<TileDim_Y-2 && localCol<TileDim_X-2)
-    {
-        auto temp = per_cell_eb_U[localRow][localCol];
-        localmin = min(localmin, temp);
-        temp =  per_cell_eb_L[localRow][localCol];
-        localmin = min(localmin, temp);
-        temp =  per_cell_eb_U[localRow+1][localCol];
-        localmin = min(localmin, temp);
-        temp = per_cell_eb_L[localRow][localCol+1];
-        localmin = min(localmin, temp);
-        temp = per_cell_eb_U[localRow+1][localCol+1];
-        localmin = min(localmin, temp);
-        temp = per_cell_eb_L[localRow+1][localCol+1];
-        localmin = min(localmin, temp);
-    }
-    __syncthreads();
-
-    /*
-    //For centeral part bug_check
-    if (localRow<TileDim_Y-1 && localCol<TileDim_X-1 && row*r2+col == 24508) {
-        buf_eb[localRow][localCol] = min(per_cell_eb_U[localRow][localCol], per_cell_eb_L[localRow][localCol]);
-        printf("buf_eb[%d][%d]: %.4f\n", localRow, localCol, buf_eb[localRow][localCol]);
-
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow + 1][localCol]);
-        printf("buf_eb[%d][%d] after U[%d+1][%d]: %.4f\n", localRow, localCol, localRow, localCol, buf_eb[localRow][localCol]);
-
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow][localCol + 1]);
-        printf("buf_eb[%d][%d] after L[%d][%d+1]: %.4f\n", localRow, localCol, localRow, localCol, buf_eb[localRow][localCol]);
-
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow + 1][localCol + 1]);
-        printf("buf_eb[%d][%d] after U[%d+1][%d+1]: %.4f\n", localRow, localCol, localRow, localCol, buf_eb[localRow][localCol]);
-
-        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow + 1][localCol + 1]);
-        printf("buf_eb[%d][%d] after L[%d+1][%d+1]: %.4f\n", localRow, localCol, localRow, localCol, buf_eb[localRow][localCol]);
-
-        // 打印每个相关变量的值
-        printf("Variables:\n");
-        printf("row: %d, col: %d\n", row, col);
-        printf("localRow: %d, localCol: %d\n", localRow, localCol);
-        printf("per_cell_eb_U[%d][%d]: %.4f\n", localRow, localCol, per_cell_eb_U[localRow][localCol]);
-        printf("per_cell_eb_L[%d][%d]: %.4f\n", localRow, localCol, per_cell_eb_L[localRow][localCol]);
-        printf("per_cell_eb_U[%d+1][%d]: %.4f\n", localRow, localCol, per_cell_eb_U[localRow + 1][localCol]);
-        printf("per_cell_eb_L[%d][%d+1]: %.4f\n", localRow, localCol, per_cell_eb_L[localRow][localCol + 1]);
-        printf("per_cell_eb_U[%d+1][%d+1]: %.4f\n", localRow, localCol, per_cell_eb_U[localRow + 1][localCol + 1]);
-        printf("per_cell_eb_L[%d+1][%d+1]: %.4f\n", localRow, localCol, per_cell_eb_L[localRow + 1][localCol + 1]);
-    }
-    __syncthreads();
-    */
-
-    if(row<r1-2 && col<r2-2 && localRow<TileDim_Y-2 && localCol<TileDim_X-2){
-        auto temp = localmin * fabs(buf_U[localRow+1][localCol+1]);
-        temp = (temp < std::numeric_limits<T>::epsilon() ?  0 : temp);
-	    int id = log2(temp / std::numeric_limits<T>::epsilon())/2.0;
-	    temp = pow(4, id) * std::numeric_limits<T>::epsilon();
-        dEb_U[(row+1) * r2 + (col+1)] = temp;
-        
-        temp = localmin * fabs(buf_V[localRow+1][localCol+1]);
-        temp = (temp < std::numeric_limits<T>::epsilon() ?  0 : temp);
-	    id = log2(temp / std::numeric_limits<T>::epsilon())/2.0;
-	    temp = pow(4, id) * std::numeric_limits<T>::epsilon();
-        dEb_V[(row+1) * r2 + (col+1)] =  temp;
-    }
-    __syncthreads();
-    
-    if((row == 0 || col ==0 || row==r1-1 || col == r2-1)&&(row<r1-1 && col<r2-1)){
-        dEb_U[row * r2 + col] = 0;
-        dEb_V[row * r2 + col] = 0;
-    }
-    __syncthreads();
-}
-
 //version 3, single thread muti-compute BLOCKSIZE_X*(TileDim_Y*NUM_PRE_THREAD) data mapto TileDim_X*TileDim_Y
 template <typename T, int TileDim_X = BLOCKSIZE_X, int TileDim_Y = BLOCKSIZE_Y, int YSEQ = NUM_PRE_THREAD>
 __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restrict__ dV, T* __restrict__ dEb, T* __restrict__  dEb_U,  T* __restrict__ dEb_V, int r1, int r2, T max_pwr_eb){
@@ -415,162 +312,6 @@ __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restri
     }
 }
 
-//正确性有问题
-//version 4, single thread muti-compute TileDim_X*(TileDim_Y*NUM_PRE_THREAD) data mapto TileDim_X*TileDim_Y with private buffer
-template <typename T, int TileDim_X = BLOCKSIZE_X, int TileDim_Y = BLOCKSIZE_Y, int YSEQ = NUM_PRE_THREAD>
-__global__ void derive_eb_offline_v4(const T* __restrict__ dU, const T* __restrict__ dV, T* __restrict__ dEb, T* __restrict__  dEb_U,  T* __restrict__ dEb_V, int r1, int r2, T max_pwr_eb){
-    __shared__ T shared_U[TileDim_Y][TileDim_X+1];
-    __shared__ T shared_V[TileDim_Y][TileDim_X+1];
-    __shared__ T shared_cell_eb_L[TileDim_Y][TileDim_X+1];
-    __shared__ T shared_cell_eb_U[TileDim_Y][TileDim_X+1];
-    //int row = blockIdx.y * (YSEQ * blockDim.y - 2) + threadIdx.y * YSEQ; // global row index
-    //int col = blockIdx.x * (blockDim.x-2) + threadIdx.x; // global col index
-#define row (blockIdx.y * (YSEQ * blockDim.y - 2) + threadIdx.y * YSEQ + i)
-#define col blockIdx.x * (blockDim.x-2) + threadIdx.x
-    //int localRow = threadIdx.y; // local row index
-    //int localCol = threadIdx.x; // local col index
-#define localRow (threadIdx.y*YSEQ + i)
-#define localCol threadIdx.x
-
-    T buff_private_U[YSEQ];
-    T buff_private_V[YSEQ];
-    T per_cell_eb_U[YSEQ];
-    T per_cell_eb_L[YSEQ];
-    T buff_eb[YSEQ];
-    for (int i = 0; i < YSEQ; i++)
-    {
-        buff_eb[i] = max_pwr_eb;
-    }
-
-    // load data from global memory to shared memory and thread register
-    for (int i = 0; i < YSEQ; i++)
-        {
-        if(row < r1 && col < r2){
-            buff_private_U[i] = dU[row*r2+col];
-            buff_private_V[i] = dV[row*r2+col];
-            if(i==0){
-                shared_U[threadIdx.y][localCol]=dU[row*r2+col];
-                shared_V[threadIdx.y][localCol]=dV[row*r2+col];
-            }
-        }
-    }
-    __syncthreads();
-
-#define FULL_MASK 0xFFFFFFFF
-    unsigned mask = __ballot_sync(FULL_MASK, localCol<TileDim_X-1);
-    for(int i = 0; i <YSEQ; i++){
-        if(localRow<YSEQ*TileDim_Y-1 && localCol<TileDim_X-1){
-            T east_U = __shfl_down_sync(mask, buff_private_U[i], 1);
-            T east_V = __shfl_down_sync(mask, buff_private_V[i], 1);
-            if(i < YSEQ-1){
-                T south_U = buff_private_U[i+1];
-                T south_V = buff_private_V[i+1];    
-                T south_east_U = __shfl_down_sync(mask, buff_private_U[i+1], 1);
-                T south_east_V = __shfl_down_sync(mask, buff_private_V[i+1], 1);
-                per_cell_eb_U[i] = gpu_max_eb_to_keep_position_and_type(buff_private_U[i], east_U, south_east_U, buff_private_V[i], east_V, south_east_V);
-                per_cell_eb_L[i] = gpu_max_eb_to_keep_position_and_type(buff_private_U[i], south_U, south_east_U, buff_private_V[i], south_V, south_east_V);
-                if(i == 0){
-                    shared_cell_eb_U[threadIdx.y][localCol] = per_cell_eb_U[i];
-                    shared_cell_eb_U[threadIdx.y][localCol] = per_cell_eb_L[i];
-                }
-            }
-            if(i == (YSEQ-1)){
-                T south_U = shared_U[threadIdx.y+1][localCol];
-                T south_V = shared_V[threadIdx.y+1][localCol];
-                T south_east_U = shared_U[threadIdx.y+1][localCol+1];
-                T south_east_V = shared_V[threadIdx.y+1][localCol+1];
-                per_cell_eb_U[i] = gpu_max_eb_to_keep_position_and_type(buff_private_U[i], east_U, south_east_U, buff_private_V[i], east_V, south_east_V);
-                per_cell_eb_L[i] = gpu_max_eb_to_keep_position_and_type(buff_private_U[i], south_U, south_east_U, buff_private_V[i], south_V, south_east_V);
-            }
-        }
-    }
-    __syncthreads();
-
-    unsigned mask1 = __ballot_sync(FULL_MASK, localCol<TileDim_X-2);
-    T localmin;
-    for (int i = 0; i < YSEQ; i++)
-    {
-        if(localRow<YSEQ*TileDim_Y-2 && localCol<TileDim_X-2)
-        {
-            if(i<YSEQ-1){
-                localmin = buff_eb[i];
-                auto temp = per_cell_eb_U[i];
-                localmin = min(localmin, temp);
-                temp =  per_cell_eb_L[i];
-                localmin = min(localmin, temp);
-                temp =  per_cell_eb_U[i+1];
-                localmin = min(localmin, temp);
-                temp =  __shfl_down_sync(mask1, per_cell_eb_L[i], 1, TileDim_X);
-                localmin = min(localmin, temp);
-                temp =  __shfl_down_sync(mask1, per_cell_eb_U[i+1], 1, TileDim_X);
-                localmin = min(localmin, temp);
-                temp =  __shfl_down_sync(mask1, per_cell_eb_L[i+1], 1, TileDim_X);
-                localmin = min(localmin, temp);
-                buff_eb[i] = localmin;
-            }
-            if(i==YSEQ-1){
-                localmin = buff_eb[i];
-                auto temp = per_cell_eb_U[i];
-                localmin = min(localmin, temp);
-                temp =  per_cell_eb_L[i];
-                localmin = min(localmin, temp);
-                temp =  shared_cell_eb_U[threadIdx.y+1][localCol];
-                localmin = min(localmin, temp);
-                temp =  __shfl_down_sync(mask1, per_cell_eb_L[i], 1, TileDim_X);
-                localmin = min(localmin, temp);
-                temp = shared_cell_eb_U[threadIdx.y+1][localCol+1];
-                localmin = min(localmin, temp);
-                temp = shared_cell_eb_L[threadIdx.y+1][localCol+1];
-                localmin = min(localmin, temp);
-                buff_eb[i] = localmin;
-            }
-        }
-    }
-    __syncthreads();
-
-    for (int i = 0; i < YSEQ; i++)
-    {
-        if(row<r1-2 && col<r2-2 && localRow<YSEQ*TileDim_Y-2 && localCol<TileDim_X-2)
-        {
-            if(i<YSEQ-1){
-                auto temp = buff_eb[i] * fabs(buff_private_U[i+1]);
-                temp = (temp < std::numeric_limits<T>::epsilon() ?  0 : temp);
-                int id = log2(temp / std::numeric_limits<T>::epsilon())/2.0;
-                temp = pow(4, id) * std::numeric_limits<T>::epsilon();
-                dEb_U[(row+1) * r2 + (col+1)] = temp;
-
-                temp = buff_eb[i] * fabs(buff_private_V[i+1]);
-                temp = (temp < std::numeric_limits<T>::epsilon() ?  0 : temp);
-                id = log2(temp / std::numeric_limits<T>::epsilon())/2.0;
-                temp = pow(4, id) * std::numeric_limits<T>::epsilon();
-                dEb_V[(row+1) * r2 + (col+1)] =  temp;
-            }
-            if(i==YSEQ-1){
-                auto temp = buff_eb[i] * fabs(shared_U[threadIdx.y+1][localCol+1]);
-                temp = (temp < std::numeric_limits<T>::epsilon() ?  0 : temp);
-                int id = log2(temp / std::numeric_limits<T>::epsilon())/2.0;
-                temp = pow(4, id) * std::numeric_limits<T>::epsilon();
-                dEb_U[(row+1) * r2 + (col+1)] = temp;
-
-                temp = buff_eb[i] * fabs(shared_V[threadIdx.y+1][localCol+1]);
-                temp = (temp < std::numeric_limits<T>::epsilon() ?  0 : temp);
-                id = log2(temp / std::numeric_limits<T>::epsilon())/2.0;
-                temp = pow(4, id) * std::numeric_limits<T>::epsilon();
-                dEb_V[(row+1) * r2 + (col+1)] =  temp;
-            }
-        }
-    }
-    __syncthreads();
-
-    for (int i = 0; i < YSEQ; i++)
-    {
-        if((row == 0 || col ==0 || row==r1-1 || col == r2-1)&&(row<r1-1 && col<r2-1)){
-            dEb_U[row * r2 + col] = 0;
-            dEb_V[row * r2 + col] = 0;
-        }
-    }
-}
-
 // compression with pre-computed error bounds
 template<typename T>
 unsigned char *
@@ -641,34 +382,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     auto bytes = 3600 * 2400 * 4 * 2.0;
     auto GiB = 1024 * 1024 * 1024.0;
     int N = 1;
-
-    //run Kernel v2:
-    // dim3 blockSize_v2(BLOCKSIZE_X, BLOCKSIZE_Y, 1);
-    // dim3 gridSize_v2((r2 + (blockSize_v2.x-2) - 1) / (blockSize_v2.x-2), (r1 + (blockSize_v2.y-2) - 1) / (blockSize_v2.y-2));
-    // printf("gridSize_v2: %d, %d\n", gridSize_v2.x, gridSize_v2.y);
-    // derive_eb_offline_v2<<<gridSize_v2, blockSize_v2>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
-    // cudaDeviceSynchronize();
-    // printf("compute V2 eb_gpu done\n"); //
-    // //printf("speed GiB/s: %f\n", bytes / GiB / (ms / 1000));
-
-    // cudaStreamCreate(&stream);
-    // cudaEventCreate(&a), cudaEventCreate(&b);
-    // for (int i_count=0;i_count<3;i_count++){
-    //     float ms = 0.0;
-    //     for (size_t i = 0; i < N; i++)
-    //     {
-    //         float temp;
-    //         cudaEventRecord(a, stream);
-    //         derive_eb_offline_v2<<<gridSize_v2, blockSize_v2, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
-    //         //cudaDeviceSynchronize();
-    //         cudaEventRecord(b, stream);
-    //         cudaStreamSynchronize(stream);
-    //         cudaEventElapsedTime(&temp, a, b);
-    //         ms+=temp;
-    //     }
-    //     printf("elasped time is %f ms, V2 speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
-    // }
-    // cudaStreamDestroy(stream);
     
     //run Kernel v3:
     dim3 blockSize_v3(BLOCKSIZE_X, BLOCKSIZE_Y, 1);
@@ -697,34 +410,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         printf("elasped time is %f ms, V3 speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
     }
     cudaStreamDestroy(stream);
-
-    //run Kernel v4:
-    // dim3 blockSize_v4(BLOCKSIZE_X, BLOCKSIZE_Y, 1);
-    // dim3 gridSize_v4((r2 + (blockSize_v4.x-2) - 1) / (blockSize_v4.x-2), (r1 + (blockSize_v4.y*NUM_PRE_THREAD-2)-1) / (blockSize_v4.y*NUM_PRE_THREAD-2));
-    // printf("gridSize_v4: %d, %d\n", gridSize_v4.x, gridSize_v4.y);
-    // derive_eb_offline_v4<<<gridSize_v4, blockSize_v4>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
-    // cudaDeviceSynchronize();
-    // printf("compute V4 eb_gpu done\n"); //
-    // //printf("speed GiB/s: %f\n", bytes / GiB / (ms / 1000));
-
-    // cudaStreamCreate(&stream);
-    // cudaEventCreate(&a), cudaEventCreate(&b);
-    // for (int i_count=0;i_count<3;i_count++){
-    //     float ms = 0.0;
-    //     for (size_t i = 0; i < N; i++)
-    //     {
-    //         float temp;
-    //         cudaEventRecord(a, stream);
-    //         derive_eb_offline_v4<<<gridSize_v4, blockSize_v4, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
-    //         //cudaDeviceSynchronize();
-    //         cudaEventRecord(b, stream);
-    //         cudaStreamSynchronize(stream);
-    //         cudaEventElapsedTime(&temp, a, b);
-    //         ms+=temp;
-    //     }
-    //     printf("elasped time is %f ms, V4 speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
-    // }
-    // cudaStreamDestroy(stream); 
 
     //verify derive_eb
     //cpu eb_u, eb_v
@@ -863,90 +548,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     //move zero_V_data back to dV
     thrust::scatter(thrust::device, zero_V_data, zero_V_data + zero_eb_U_count, zero_V_indices, dV_decomp);
 
-
-    //test compression and decompression
-    /*
-    cudaStreamCreate(&stream);
-    cudaEventCreate(&a), cudaEventCreate(&b);
-    for (int i_count=0;i_count<3;i_count++){
-        float ms = 0.0;
-        for (size_t i = 0; i < N; i++)
-        {
-            float temp;
-            cudaEventRecord(a, stream);
-            psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, uint16_t>(
-    	        dU, dim3(r2, r1, 1), eq_U, ot_val_U, ot_idx_U, ot_num_U, dEb_U, 512, &lrz_time, 0);
-            //cudaDeviceSynchronize();
-            cudaEventRecord(b, stream);
-            cudaStreamSynchronize(stream);
-            cudaEventElapsedTime(&temp, a, b);
-            ms+=temp;
-        }
-        printf("Compression U elasped time is %f ms, speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
-    }
-    cudaStreamDestroy(stream);
-
-    cudaStreamCreate(&stream);
-    cudaEventCreate(&a), cudaEventCreate(&b);
-    for (int i_count=0;i_count<3;i_count++){
-        float ms = 0.0;
-        for (size_t i = 0; i < N; i++)
-        {
-            float temp;
-            cudaEventRecord(a, stream);
-            psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, uint16_t>(
-    	        dV, dim3(r2, r1, 1), eq_V, ot_val_V, ot_idx_V, ot_num_V, dEb_V, 512, &lrz_time, 0);
-            //cudaDeviceSynchronize();
-            cudaEventRecord(b, stream);
-            cudaStreamSynchronize(stream);
-            cudaEventElapsedTime(&temp, a, b);
-            ms+=temp;
-        }
-        printf("Compression V elasped time is %f ms, speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
-    }
-    cudaStreamDestroy(stream);
-
-    cudaStreamCreate(&stream);
-    cudaEventCreate(&a), cudaEventCreate(&b);
-    for (int i_count=0;i_count<3;i_count++){
-        float ms = 0.0;
-        for (size_t i = 0; i < N; i++)
-        {
-            float temp;
-            cudaEventRecord(a, stream);
-            psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
-    	        eq_U, dU_decomp, dU_decomp, dim3(r2, r1, 1), dEb_U, 512, &lrz_time, 0);
-            //cudaDeviceSynchronize();
-            cudaEventRecord(b, stream);
-            cudaStreamSynchronize(stream);
-            cudaEventElapsedTime(&temp, a, b);
-            ms+=temp;
-        }
-        printf("Decompression U elasped time is %f ms, speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
-    }
-    cudaStreamDestroy(stream);
-
-    cudaStreamCreate(&stream);
-    cudaEventCreate(&a), cudaEventCreate(&b);
-    for (int i_count=0;i_count<3;i_count++){
-        float ms = 0.0;
-        for (size_t i = 0; i < N; i++)
-        {
-            float temp;
-            cudaEventRecord(a, stream);
-            psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
-                eq_V, dV_decomp, /dV_decomp, dim3(r2, r1, 1), dEb_V, 512, &lrz_time, 0);
-            //cudaDeviceSynchronize();
-            cudaEventRecord(b, stream);
-            cudaStreamSynchronize(stream);
-            cudaEventElapsedTime(&temp, a, b);
-            ms+=temp;
-        }
-        printf("Decompression V elasped time is %f ms, speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
-    }
-    cudaStreamDestroy(stream);
-    */
-
     printf("compute eq done\n");
     err = cudaGetLastError();
     if (err != cudaSuccess) {
@@ -971,47 +572,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     //cudaMemcpy(eb_gpu, dEb, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
     cudaMemcpy(U_decomp,dU_decomp, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
     cudaMemcpy(V_decomp,dV_decomp, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
-
-    //Compute time:
-    //CPU time
-    /*
-    double t0,t1;
-    for (int i_count=0;i_count<10;i_count++){
-        t0=get_sec();
-        for (size_t i = 0; i < N; i++)
-        {
-            U_pos = U;
-            V_pos = V;
-            eb_pos = eb;
-            for(int i=0; i<r1-1; i++){
-                const T * U_row_pos = U_pos;
-                const T * V_row_pos = V_pos;
-                float * eb_row_pos = eb_pos;
-                for(int j=0; j<r2-1; j++){
-                    for(int k=0; k<2; k++){
-                        //printf("U_row_pos: %p, V_row_pos: %p, eb_row_pos: %p\n", U_row_pos, V_row_pos, eb_row_pos);
-                        auto X = (k == 0) ? X_upper : X_lower;
-                        auto offset = (k == 0) ? offset_upper : offset_lower;
-                        // reversed order!
-                        T max_cur_eb = gpu_max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
-                        	V_row_pos[offset[0]], V_row_pos[offset[1]], V_row_pos[offset[2]]);
-                        eb_row_pos[offset[0]] = MINF(eb_row_pos[offset[0]], max_cur_eb);
-                        eb_row_pos[offset[1]] = MINF(eb_row_pos[offset[1]], max_cur_eb);
-                        eb_row_pos[offset[2]] = MINF(eb_row_pos[offset[2]], max_cur_eb);
-                    }
-                    U_row_pos ++;
-                    V_row_pos ++;
-                    eb_row_pos ++;
-                }
-                U_pos += r2;
-                V_pos += r2;
-                eb_pos += r2;
-            }
-        }
-        t1=get_sec();
-        printf("Average CPU elasped time: %f second\n", (t1-t0)/N);
-    }
-    */
     
     //cudaFree
     cudaFree(eb_gpu);
@@ -1027,59 +587,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaFree(zero_U_indices);
     cudaFree(zero_V_data);
     cudaFree(zero_V_indices);
-
-    //compression
-    /*
-    double * eb_u = (double *) malloc(num_elements * sizeof(double));
-    double * eb_v = (double *) malloc(num_elements * sizeof(double));
-    int * eb_quant_index = (int *) malloc(2*num_elements*sizeof(int));
-    int * eb_quant_index_pos = eb_quant_index;
-    const int base = 4;
-    double log2_of_base = log2(base);
-    const double threshold = std::numeric_limits<double>::epsilon();
-    for(int i=0; i<num_elements; i++){
-    	eb_u[i] = fabs(U[i]) * eb[i];
-    	*(eb_quant_index_pos ++) = eb_exponential_quantize(eb_u[i], base, log2_of_base, threshold);
-    	// *(eb_quant_index_pos ++) = eb_linear_quantize(eb_u[i], 1e-2);
-    	if(eb_u[i] < threshold) eb_u[i] = 0;
-    }
-    for(int i=0; i<num_elements; i++){
-    	eb_v[i] = fabs(V[i]) * eb[i];
-    	*(eb_quant_index_pos ++) = eb_exponential_quantize(eb_v[i], base, log2_of_base, threshold);
-    	// *(eb_quant_index_pos ++) = eb_linear_quantize(eb_v[i], 1e-2);
-    	if(eb_v[i] < threshold) eb_v[i] = 0;
-    }
-    free(eb);
-    printf("quantize eb done\n");
-    unsigned char * compressed_eb = (unsigned char *) malloc(2*num_elements*sizeof(int));
-    unsigned char * compressed_eb_pos = compressed_eb; 
-    Huffman_encode_tree_and_data(2*1024, eb_quant_index, 2*num_elements, compressed_eb_pos);
-    size_t compressed_eb_size = compressed_eb_pos - compressed_eb;
-    size_t compressed_u_size = 0;
-    size_t compressed_v_size = 0;
-    unsigned char * compressed_u = sz_compress_2d_with_eb(U, eb_u, r1, r2, compressed_u_size);
-    unsigned char * compressed_v = sz_compress_2d_with_eb(V, eb_v, r1, r2, compressed_v_size);
-    printf("eb_size = %ld, u_size = %ld, v_size = %ld\n", compressed_eb_size, compressed_u_size, compressed_v_size);
-    free(eb_u);
-    free(eb_v);
-    compressed_size = sizeof(int) + sizeof(size_t) + compressed_eb_size + sizeof(size_t) + compressed_u_size + sizeof(size_t) + compressed_v_size;
-    unsigned char * compressed = (unsigned char *) malloc(compressed_size);
-    unsigned char * compressed_pos = compressed;
-    write_variable_to_dst(compressed_pos, base);
-    write_variable_to_dst(compressed_pos, threshold);
-    write_variable_to_dst(compressed_pos, compressed_eb_size);
-    write_variable_to_dst(compressed_pos, compressed_u_size);
-    write_variable_to_dst(compressed_pos, compressed_v_size);
-    write_array_to_dst(compressed_pos, compressed_eb, compressed_eb_size);
-    write_array_to_dst(compressed_pos, compressed_u, compressed_u_size);
-    printf("compressed_pos = %ld\n", compressed_pos - compressed);
-    write_array_to_dst(compressed_pos, compressed_v, compressed_v_size);
-    free(compressed_eb);
-    free(compressed_u);
-    free(compressed_v);
-    */
-
-    //free(eb);
     return 0;
 }
 
@@ -1090,18 +597,6 @@ int main(int argc, char ** argv){
     int r1 = atoi(argv[3]);
     int r2 = atoi(argv[4]);
     float max_eb = atof(argv[5]);
-
-    /*
-    // Remember to delete when real using
-    // Test Use for U and V
-    // Initialize U and V with sequential values
-    for (int i = 0; i < r1; ++i) {
-        for (int j = 0; j < r2; ++j) {
-            U[i * r2 + j] = i * r2 + j; // Row-major order
-            V[i * r2 + j] = i * r2 + j; // Or any other initialization
-        }
-    }
-    */
 
     size_t result_size = 0;
     //struct timespec start, end;
@@ -1121,36 +616,8 @@ int main(int argc, char ** argv){
     float * V_decomp = (float *) malloc(r1 * r2 * sizeof(float));
 
     unsigned char * result = sz_compress_cp_preserve_2d_offline_gpu(U, V, r1, r2, result_size, false, max_eb, ot_val_U, ot_idx_U, ot_num_U, ot_val_V, ot_idx_V, ot_num_V, U_decomp, V_decomp);
-    // unsigned char * result = sz_compress_cp_preserve_2d_offline_log(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz_compress_cp_preserve_2d_online_gpu(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online_abs(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz_compress_cp_preserve_2d_online_abs_relax_FN(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz_compress_cp_preserve_2d_bilinear_online_log(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz_compress_cp_preserve_2d_online_log(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz3_compress_cp_preserve_2d_online_abs(U, V, r1, r2, result_size, false, max_eb);
 
-    /*
-    unsigned char * result_after_lossless = NULL;
-    size_t lossless_outsize = sz_lossless_compress(ZSTD_COMPRESSOR, 3, result, result_size, &result_after_lossless);
-    err = clock_gettime(CLOCK_REALTIME, &end);
-    cout << "Compression time: " << (double)(end.tv_sec - start.tv_sec) + (double)(end.tv_nsec - start.tv_nsec)/(double)1000000000 << "s" << endl;
-    cout << "Compressed size = " << lossless_outsize << ", ratio = " << (2*num_elements*sizeof(float)) * 1.0/lossless_outsize << endl;
-    free(result);
-    // exit(0);
-    err = clock_gettime(CLOCK_REALTIME, &start);
-    size_t lossless_output = sz_lossless_decompress(ZSTD_COMPRESSOR, result_after_lossless, lossless_outsize, &result, result_size);
-    float * dec_U = NULL;
-    float * dec_V = NULL;
-
-    sz_decompress_cp_preserve_2d_offline<float>(result, r1, r2, dec_U, dec_V);
-    // sz_decompress_cp_preserve_2d_offline_log<float>(result, r1, r2, dec_U, dec_V);
-    // sz_decompress_cp_preserve_2d_online<float>(result, r1, r2, dec_U, dec_V);
-    // sz_decompress_cp_preserve_2d_online_log<float>(result, r1, r2, dec_U, dec_V);
-    // sz3_decompress_cp_preserve_2d_online<float>(result, r1, r2, dec_U, dec_V);
-    err = clock_gettime(CLOCK_REALTIME, &end);
-    cout << "Decompression time: " << (double)(end.tv_sec - start.tv_sec) + (double)(end.tv_nsec - start.tv_nsec)/(double)1000000000 << "s" << endl;
-    free(result_after_lossless);
-    */
     verify(U, U_decomp, num_elements);
     verify(V, V_decomp, num_elements);
     
