@@ -362,6 +362,7 @@ __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restri
         
     }
     __syncthreads();
+    return;
 
     T localmin;
     for (int i = 0; i < YSEQ; i++)
@@ -726,7 +727,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     // cudaStreamDestroy(stream); 
 
     //verify derive_eb
-    
     //cpu eb_u, eb_v
     const int base = 4;
 	T log2_of_base = log2(base);
@@ -793,7 +793,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     }
     printf("maxdiff: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
     printf("eb_v_gpu: %f, eb_v: %f\n", eb_v_gpu[maxdiff_index], eb_v[maxdiff_index]);
-    
+    return 0;
 
     // deal with eb =zero  
     //U
