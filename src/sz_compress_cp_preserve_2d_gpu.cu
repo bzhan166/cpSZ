@@ -362,7 +362,8 @@ __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restri
         
     }
     __syncthreads();
-    return ;
+    return;
+
     T localmin;
     for (int i = 0; i < YSEQ; i++)
     {
