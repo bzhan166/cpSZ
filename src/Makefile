@@ -51,4 +51,3 @@ check_register:
 
 clean:
 	rm -f cpszg lproto_c.o lproto_x.o
-

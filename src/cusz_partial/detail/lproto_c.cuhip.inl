@@ -105,26 +105,20 @@ __global__ void KERNEL_CUHIP_prototype_c_lorenzo_2d1l__eb_list(
     CompactNum* const out_cn, uint16_t const radius, T* eb_list)
 {
   SETUP_ND_GPU_CUDA;
-
   __shared__ T buf[TileDim][TileDim + 1];
-
   uint32_t y = threadIdx.y, x = threadIdx.x;
   auto data = [&](auto dx, auto dy) -> T& {
     return buf[t().y + dy][t().x + dx];
   };
-
   auto id = gid2();
-
   if (check_boundary2()) { 
     auto ebx2_r = 0.5 / eb_list[id];
     data(0, 0) = round(in_data[id] *  ebx2_r); 
   }
   __syncthreads();
-
   T delta = data(0, 0) - ((x > 0 ? data(-1, 0) : 0) +             // dist=1
                           (y > 0 ? data(0, -1) : 0) -             // dist=1
                           (x > 0 and y > 0 ? data(-1, -1) : 0));  // dist=2
-
   bool quantizable = ((fabs(delta) < radius));
   T candidate = delta + radius;
   if (check_boundary2()) {
