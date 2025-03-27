@@ -605,7 +605,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
 
 
     //test compression and decompression
-    
+    /*
     cudaStreamCreate(&stream);
     cudaEventCreate(&a), cudaEventCreate(&b);
     for (int i_count=0;i_count<3;i_count++){
@@ -685,7 +685,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         printf("Decompression V elasped time is %f ms, speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
     }
     cudaStreamDestroy(stream);
-    
+    */
 
     printf("compute eq done\n");
     err = cudaGetLastError();
