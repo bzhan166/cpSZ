@@ -346,13 +346,13 @@ __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restri
             auto temp = buf_eb[localRow][localCol] * fabs(buf_U[localRow+1][localCol+1]);
             temp = (temp < std::numeric_limits<T>::epsilon() ?  0 : temp);
             int id = log2(temp / std::numeric_limits<T>::epsilon())/2.0;
-            temp = (1 << (2 * id)) * std::numeric_limits<T>::epsilon();
+            temp = pow(4, id) * std::numeric_limits<T>::epsilon();
             dEb_U[(row+1) * r2 + (col+1)] = temp;
 
             temp = buf_eb[localRow][localCol] * fabs(buf_V[localRow+1][localCol+1]);
             temp = (temp < std::numeric_limits<T>::epsilon() ?  0 : temp);
             id = log2(temp / std::numeric_limits<T>::epsilon())/2.0;
-            temp = (1 << (2 * id)) * std::numeric_limits<T>::epsilon();
+            temp = pow(4, id) * std::numeric_limits<T>::epsilon();
             dEb_V[(row+1) * r2 + (col+1)] =  temp;
         }
     }
