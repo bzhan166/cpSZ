@@ -331,44 +331,44 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     size_t num_elements = r1 * r2;
     T * eb_gpu; cudaMalloc(&eb_gpu, r1 * r2 * sizeof(T));
     cudaMemset(eb_gpu, max_pwr_eb, r2 * r1 * sizeof(T));
-    // T * eb = (T *) malloc(num_elements * sizeof(T));
-    // for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
+    T * eb = (T *) malloc(num_elements * sizeof(T));
+    for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
     
-    // // CPU code
-    // const T * U_pos = U;
-    // const T * V_pos = V;
-    // T * eb_pos = eb;
-    // // coordinates for triangle_coordinates
-    // const T X_upper[3][2] = {{0, 0}, {1, 0}, {1, 1}};
-    // const T X_lower[3][2] = {{0, 0}, {0, 1}, {1, 1}};
-    // const size_t offset_upper[3] = {0, r2, r2+1};
-    // const size_t offset_lower[3] = {0, 1, r2+1};
-    // printf("compute eb\n");
-    // for(int i=0; i<r1-1; i++){
-    //     const T * U_row_pos = U_pos;
-    //     const T * V_row_pos = V_pos;
-    //     float * eb_row_pos = eb_pos;
-    //     for(int j=0; j<r2-1; j++){
-    //         for(int k=0; k<2; k++){
-    //             //printf("U_row_pos: %p, V_row_pos: %p, eb_row_pos: %p\n", U_row_pos, V_row_pos, eb_row_pos);
-    //             auto X = (k == 0) ? X_upper : X_lower;
-    //             auto offset = (k == 0) ? offset_upper : offset_lower;
-    //             // reversed order!
-    //             T max_cur_eb = max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
-    //             	V_row_pos[offset[0]], V_row_pos[offset[1]], V_row_pos[offset[2]]);
-    //             eb_row_pos[offset[0]] = MINF(eb_row_pos[offset[0]], max_cur_eb);
-    //             eb_row_pos[offset[1]] = MINF(eb_row_pos[offset[1]], max_cur_eb);
-    //             eb_row_pos[offset[2]] = MINF(eb_row_pos[offset[2]], max_cur_eb);
-    //         }
-    //         U_row_pos ++;
-    //         V_row_pos ++;
-    //         eb_row_pos ++;
-    //     }
-    //     U_pos += r2;
-    //     V_pos += r2;
-    //     eb_pos += r2;
-    // }
-    // printf("compute eb done\n");
+    // CPU code
+    const T * U_pos = U;
+    const T * V_pos = V;
+    T * eb_pos = eb;
+    // coordinates for triangle_coordinates
+    const T X_upper[3][2] = {{0, 0}, {1, 0}, {1, 1}};
+    const T X_lower[3][2] = {{0, 0}, {0, 1}, {1, 1}};
+    const size_t offset_upper[3] = {0, r2, r2+1};
+    const size_t offset_lower[3] = {0, 1, r2+1};
+    printf("compute eb\n");
+    for(int i=0; i<r1-1; i++){
+        const T * U_row_pos = U_pos;
+        const T * V_row_pos = V_pos;
+        float * eb_row_pos = eb_pos;
+        for(int j=0; j<r2-1; j++){
+            for(int k=0; k<2; k++){
+                //printf("U_row_pos: %p, V_row_pos: %p, eb_row_pos: %p\n", U_row_pos, V_row_pos, eb_row_pos);
+                auto X = (k == 0) ? X_upper : X_lower;
+                auto offset = (k == 0) ? offset_upper : offset_lower;
+                // reversed order!
+                T max_cur_eb = max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
+                	V_row_pos[offset[0]], V_row_pos[offset[1]], V_row_pos[offset[2]]);
+                eb_row_pos[offset[0]] = MINF(eb_row_pos[offset[0]], max_cur_eb);
+                eb_row_pos[offset[1]] = MINF(eb_row_pos[offset[1]], max_cur_eb);
+                eb_row_pos[offset[2]] = MINF(eb_row_pos[offset[2]], max_cur_eb);
+            }
+            U_row_pos ++;
+            V_row_pos ++;
+            eb_row_pos ++;
+        }
+        U_pos += r2;
+        V_pos += r2;
+        eb_pos += r2;
+    }
+    printf("compute eb done\n");
     
    
     // compression gpu
@@ -384,12 +384,12 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     
 
 
-    // cudaStream_t stream;
-    // cudaEvent_t a, b;
+    cudaStream_t stream;
+    cudaEvent_t a, b;
 
-    // auto bytes = 3600 * 2400 * 4 * 2.0;
-    // auto GiB = 1024 * 1024 * 1024.0;
-    // int N = 1;
+    auto bytes = 3600 * 2400 * 4 * 2.0;
+    auto GiB = 1024 * 1024 * 1024.0;
+    int N = 1;
 
     //run Kernel v3:
     dim3 blockSize_v3(BLOCKSIZE_X, BLOCKSIZE_Y, 1);
@@ -401,105 +401,100 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     //printf("speed GiB/s: %f\n", bytes / GiB / (ms / 1000));
 
 
-    // cudaStreamCreate(&stream);
-    // cudaEventCreate(&a), cudaEventCreate(&b);
-    // for (int i_count=0;i_count<3;i_count++){
-    //     float ms = 0.0;
-    //     for (size_t i = 0; i < N; i++)
-    //     {
-    //         float temp;
-    //         cudaEventRecord(a, stream);
-    //         derive_eb_offline_v3<<<gridSize_v3, blockSize_v3, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
-    //         //cudaDeviceSynchronize();
-    //         cudaEventRecord(b, stream);
-    //         cudaStreamSynchronize(stream);
-    //         cudaEventElapsedTime(&temp, a, b);
-    //         ms+=temp;
-    //     }
-    //     printf("elasped time is %f ms, V3 speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
-    // }
-    // cudaStreamDestroy(stream);
+    cudaStreamCreate(&stream);
+    cudaEventCreate(&a), cudaEventCreate(&b);
+    for (int i_count=0;i_count<3;i_count++){
+        float ms = 0.0;
+        for (size_t i = 0; i < N; i++)
+        {
+            float temp;
+            cudaEventRecord(a, stream);
+            derive_eb_offline_v3<<<gridSize_v3, blockSize_v3, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
+            //cudaDeviceSynchronize();
+            cudaEventRecord(b, stream);
+            cudaStreamSynchronize(stream);
+            cudaEventElapsedTime(&temp, a, b);
+            ms+=temp;
+        }
+        printf("elasped time is %f ms, V3 speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
+    }
+    cudaStreamDestroy(stream);
 
-    // //verify derive_eb
-    // //cpu eb_u, eb_v
-    // const int base = 4;
-	// T log2_of_base = log2(base);
-	// const T threshold = (T)(1.0 / (1 << 20));
-    // T * eb_u = (T *) malloc(num_elements * sizeof(T));
-	// T * eb_v = (T *) malloc(num_elements * sizeof(T));
-    // for(int i=0; i<num_elements; i++){
-	// 	eb_u[i] = fabs(U[i]) * eb[i];
-	// 	int temp_eb_u = eb_exponential_quantize(eb_u[i], base, log2_of_base, threshold);
-	// 	if(eb_u[i] < threshold) eb_u[i] = 0;
-	// }
-	// for(int i=0; i<num_elements; i++){
-	// 	eb_v[i] = fabs(V[i]) * eb[i];
-	// 	int temp_eb_v = eb_exponential_quantize(eb_v[i], base, log2_of_base, threshold);
-	// 	if(eb_v[i] < threshold) eb_v[i] = 0;
-	// }
+    //verify derive_eb
+    //cpu eb_u, eb_v
+    const int base = 4;
+	T log2_of_base = log2(base);
+	const T threshold = (T)(1.0 / (1 << 20));
+    T * eb_u = (T *) malloc(num_elements * sizeof(T));
+	T * eb_v = (T *) malloc(num_elements * sizeof(T));
+    for(int i=0; i<num_elements; i++){
+		eb_u[i] = fabs(U[i]) * eb[i];
+		int temp_eb_u = eb_exponential_quantize(eb_u[i], base, log2_of_base, threshold);
+		if(eb_u[i] < threshold) eb_u[i] = 0;
+	}
+	for(int i=0; i<num_elements; i++){
+		eb_v[i] = fabs(V[i]) * eb[i];
+		int temp_eb_v = eb_exponential_quantize(eb_v[i], base, log2_of_base, threshold);
+		if(eb_v[i] < threshold) eb_v[i] = 0;
+	}
+    //verfiy eb eb_u, eb_v
+    T * eb_u_gpu = (T *) malloc(num_elements * sizeof(T));;
+    cudaMemcpy(eb_u_gpu, dEb_U, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
+    T * eb_v_gpu = (T *) malloc(num_elements * sizeof(T));;
+    cudaMemcpy(eb_v_gpu, dEb_V, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
+    double diff = 0.0;
+    double maxdiff = 0.0;
+    int count=0;
+    int maxdiff_index = 0;
+    for (int i = 1; i < r1-1; i++){
+        for(int j = 1; j < r2-1; j++){
+            diff = fabs(eb_u_gpu[i*r2+j] - eb_u[i*r2+j]);
+            if(diff > maxdiff)
+            { 
+                maxdiff = diff;
+                maxdiff_index = i*r2+j;    
+            }
+            if (diff > std::numeric_limits<T>::epsilon()) {
+                //printf("error. eb_u_gpu: %5.2f, eb_u: %5.2f,%d\n", eb_u_gpu[i],eb_u[i],i);
+                //break;
+                count++;
+            }
+        }
+    }
+    int count_zero = 0;
+    for (int i = 0; i < r1 * r2; ++i) {
+        if(eb_u_gpu[i] == 0) count_zero++;
+    }
+    printf("count_zero: %d\n", count_zero);
+    printf("maxdiff: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
+    printf("eb_u_gpu: %f, eb_u: %f\n", eb_u_gpu[maxdiff_index], eb_u[maxdiff_index]);
 
-    // //verfiy eb eb_u, eb_v
-    // T * eb_u_gpu = (T *) malloc(num_elements * sizeof(T));;
-    // cudaMemcpy(eb_u_gpu, dEb_U, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
-    // T * eb_v_gpu = (T *) malloc(num_elements * sizeof(T));;
-    // cudaMemcpy(eb_v_gpu, dEb_V, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
-    // double diff = 0.0;
-    // double maxdiff = 0.0;
-    // int count=0;
-    // int maxdiff_index = 0;
-    
-    // for (int i = 1; i < r1-1; i++){
-    //     for(int j = 1; j < r2-1; j++){
-    //         diff = fabs(eb_u_gpu[i*r2+j] - eb_u[i*r2+j]);
-    //         if(diff > maxdiff)
-    //         { 
-    //             maxdiff = diff;
-    //             maxdiff_index = i*r2+j;    
-    //         }
-    //         if (diff > std::numeric_limits<T>::epsilon()) {
-    //             //printf("error. eb_u_gpu: %5.2f, eb_u: %5.2f,%d\n", eb_u_gpu[i],eb_u[i],i);
-    //             //break;
-    //             count++;
-    //         }
-    //     }
-    // }
-    
-    // int count_zero = 0;
-    // for (int i = 0; i < r1 * r2; ++i) {
-    //     if(eb_u_gpu[i] == 0) count_zero++;
-    // }
-    // printf("count_zero: %d\n", count_zero);
-
-    // printf("maxdiff: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
-    // printf("eb_u_gpu: %f, eb_u: %f\n", eb_u_gpu[maxdiff_index], eb_u[maxdiff_index]);
-
-    // diff = 0.0;
-    // maxdiff = 0.0;
-    // count=0;
-    // maxdiff_index = 0;
-    // for (int i = 1; i < r1-1; i++){
-    //     for(int j = 1; j < r2-1; j++){
-    //         diff = fabs(eb_v_gpu[i*r2+j] - eb_v[i*r2+j]);
-    //         if(diff > maxdiff)
-    //         { 
-    //             maxdiff = diff;
-    //             maxdiff_index = i*r2+j;    
-    //         }
-    //         if (diff > std::numeric_limits<T>::epsilon()) {
-    //             //printf("error. eb_u_gpu: %5.2f, eb_u: %5.2f,%d\n", eb_u_gpu[i],eb_u[i],i);
-    //             //break;
-    //             count++;
-    //         }
-    //     }
-    // }
-    // printf("maxdiff: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
-    // printf("eb_v_gpu: %f, eb_v: %f\n", eb_v_gpu[maxdiff_index], eb_v[maxdiff_index]);
+    diff = 0.0;
+    maxdiff = 0.0;
+    count=0;
+    maxdiff_index = 0;
+    for (int i = 1; i < r1-1; i++){
+        for(int j = 1; j < r2-1; j++){
+            diff = fabs(eb_v_gpu[i*r2+j] - eb_v[i*r2+j]);
+            if(diff > maxdiff)
+            { 
+                maxdiff = diff;
+                maxdiff_index = i*r2+j;    
+            }
+            if (diff > std::numeric_limits<T>::epsilon()) {
+                //printf("error. eb_u_gpu: %5.2f, eb_u: %5.2f,%d\n", eb_u_gpu[i],eb_u[i],i);
+                //break;
+                count++;
+            }
+        }
+    }
+    printf("maxdiff: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
+    printf("eb_v_gpu: %f, eb_v: %f\n", eb_v_gpu[maxdiff_index], eb_v[maxdiff_index]);
 
     //If U and V are both 0, means it is land in occean data, 
     //so it compress and decompress is all 0, we can just set eb = max-pwr
     thrust::counting_iterator<size_t> idx_first(0);
     thrust::counting_iterator<size_t> idx_last = idx_first + num_elements;
-
     thrust::for_each(
         idx_first, idx_last,
         [=] __device__ (size_t i) {
@@ -510,7 +505,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         }
     );
 
-    //deal with eb =zero  
+    //deal with eb=zero  
     //U
     uint32_t* d_indices; cudaMalloc(&d_indices, r1 * r2 * sizeof(uint32_t));
     T* zero_U_data;
@@ -665,26 +660,26 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaStreamDestroy(stream);
     */
 
-    // cudaError_t err;
-    // printf("compute eq done\n");
-    // err = cudaGetLastError();
-    // if (err != cudaSuccess) {
-    //     printf("Kernel launch failed: %s\n", cudaGetErrorString(err));
-    //     cudaFree(eb_gpu);
-    //     cudaFree(dU);
-    //     cudaFree(dV);
-    //     cudaFree(eq_U);
-    //     cudaFree(eq_V);
-    //     cudaFree(dU_decomp);
-    //     cudaFree(dV_decomp);
-    //     cudaFree(dEb_U);
-    //     cudaFree(dEb_V);
-    //     cudaFree(zero_U_data);
-    //     cudaFree(zero_U_indices);
-    //     cudaFree(zero_V_data);
-    //     cudaFree(zero_V_indices);
-    //     return 0;
-    // }
+    cudaError_t err;
+    printf("compute eq done\n");
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("Kernel launch failed: %s\n", cudaGetErrorString(err));
+        cudaFree(eb_gpu);
+        cudaFree(dU);
+        cudaFree(dV);
+        cudaFree(eq_U);
+        cudaFree(eq_V);
+        cudaFree(dU_decomp);
+        cudaFree(dV_decomp);
+        cudaFree(dEb_U);
+        cudaFree(dEb_V);
+        cudaFree(zero_U_data);
+        cudaFree(zero_U_indices);
+        cudaFree(zero_V_data);
+        cudaFree(zero_V_indices);
+        return 0;
+    }
 
     //copy back
     cudaMemcpy(U_decomp,dU_decomp, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
