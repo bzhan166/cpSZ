@@ -4,6 +4,8 @@
 #include "sz_def.hpp"
 #include "sz_compression_utils.hpp"
 #include "sz3_utils.hpp"
+#include <iostream>
+#include <chrono>
 
 template<typename Type>
 void writefile(const char * file, Type * data, size_t num_elements){
@@ -186,6 +188,7 @@ sz_compress_cp_preserve_2d_offline(const T * U, const T * V, size_t r1, size_t r
 	const T X_lower[3][2] = {{0, 0}, {0, 1}, {1, 1}};
 	const size_t offset_upper[3] = {0, r2, r2+1};
 	const size_t offset_lower[3] = {0, 1, r2+1};
+	auto start = std::chrono::high_resolution_clock::now();
 	printf("compute eb\n");
 	for(int i=0; i<r1-1; i++){
 		const T * U_row_pos = U_pos;
@@ -212,6 +215,11 @@ sz_compress_cp_preserve_2d_offline(const T * U, const T * V, size_t r1, size_t r
 		eb_pos += r2;
 	}
 	printf("compute eb done\n");
+	printf("quantize eb done\n");
+	auto end = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsed = end - start;
+	std::cout << "运行时间: " << elapsed.count() << " 秒" << std::endl;
+	
 	double * eb_u = (double *) malloc(num_elements * sizeof(double));
 	double * eb_v = (double *) malloc(num_elements * sizeof(double));
 	int * eb_quant_index = (int *) malloc(2*num_elements*sizeof(int));
@@ -733,7 +741,7 @@ triangle mesh x0, x1, x2, derive absolute cp-preserving eb for x2 given x0, x1
 template<typename T>
 double 
 derive_cp_eb_for_positions_online_abs(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2){
-	double M0 = u2*v0 - u0*v2;
+  double M0 = u2*v0 - u0*v2;
   double M1 = u1*v2 - u2*v1;
   double M2 = u0*v1 - u1*v0;
   double M = M0 + M1 + M2;
