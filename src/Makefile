@@ -23,7 +23,7 @@ lproto_x.o: cusz_partial/lproto_x.cu
 		-DPSZ_USE_CUDA=1 
 
 cpsz: sz_compress_cp_preserve_2d_gpu.cu cusz_lrzc cusz_lrzx
-	nvcc -O3 sz_compress_cp_preserve_2d_gpu.cu \
+	nvcc -O3 --extended-lambda sz_compress_cp_preserve_2d_gpu.cu \
 		-I../include \
 		-Icusz_partial \
 		-I$(HOME)/install/include/cusz \
@@ -37,7 +37,7 @@ cpsz: sz_compress_cp_preserve_2d_gpu.cu cusz_lrzc cusz_lrzx
 		-o cpszg
 
 check_register:
-	nvcc -Xptxas=-v sz_compress_cp_preserve_2d_gpu.cu \
+	nvcc --extended-lambda -Xptxas=-v sz_compress_cp_preserve_2d_gpu.cu \
 		-I../include \
 		-Icusz_partial \
 		-I$(HOME)/install/include/cusz \

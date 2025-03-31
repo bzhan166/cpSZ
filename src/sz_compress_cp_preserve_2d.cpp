@@ -188,7 +188,9 @@ sz_compress_cp_preserve_2d_offline(const T * U, const T * V, size_t r1, size_t r
 	const T X_lower[3][2] = {{0, 0}, {0, 1}, {1, 1}};
 	const size_t offset_upper[3] = {0, r2, r2+1};
 	const size_t offset_lower[3] = {0, 1, r2+1};
+
 	auto start = std::chrono::high_resolution_clock::now();
+	
 	printf("compute eb\n");
 	for(int i=0; i<r1-1; i++){
 		const T * U_row_pos = U_pos;
@@ -216,6 +218,7 @@ sz_compress_cp_preserve_2d_offline(const T * U, const T * V, size_t r1, size_t r
 	}
 	printf("compute eb done\n");
 	printf("quantize eb done\n");
+
 	auto end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double> elapsed = end - start;
 	std::cout << "运行时间: " << elapsed.count() << " 秒" << std::endl;

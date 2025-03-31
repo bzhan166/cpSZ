@@ -327,6 +327,7 @@ unsigned char *
 sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, T max_pwr_eb, 
         T* ot_val_U, uint32_t* ot_idx_U, uint32_t* ot_num_U, T* ot_val_V, uint32_t* ot_idx_V, uint32_t* ot_num_V, T* U_decomp, T* V_decomp){
     
+    auto start = std::chrono::high_resolution_clock::now();
     size_t num_elements = r1 * r2;
     T * eb = (T *) malloc(num_elements * sizeof(T));
     for(int i=0; i<num_elements; i++) eb[i] = max_pwr_eb;
@@ -372,7 +373,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
    
     // compression gpu
     printf("compute eb_gpu\n");   
-    cudaError_t err;
 
     T *dU, *dV, *dEb_U, *dEb_V;
     cudaMalloc(&dU, r1 * r2 * sizeof(T));
@@ -463,6 +463,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
             }
         }
     }
+    
     int count_zero = 0;
     for (int i = 0; i < r1 * r2; ++i) {
         if(eb_u_gpu[i] == 0) count_zero++;
@@ -493,7 +494,21 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     }
     printf("maxdiff: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
     printf("eb_v_gpu: %f, eb_v: %f\n", eb_v_gpu[maxdiff_index], eb_v[maxdiff_index]);
-    
+
+    //If U and V are both 0, means it is land in occean data, 
+    //so it compress and decompress is all 0, we can just set eb = max-pwr
+    thrust::counting_iterator<size_t> idx_first(0);
+    thrust::counting_iterator<size_t> idx_last = idx_first + num_elements;
+
+    thrust::for_each(
+        idx_first, idx_last,
+        [=] __device__ (size_t i) {
+            if (dU[i] == 0 && dV[i] == 0) {
+                dEb_U[i] = max_pwr_eb;
+                dEb_V[i] = max_pwr_eb;
+            }
+        }
+    );
 
     //deal with eb =zero  
     //U
@@ -540,6 +555,10 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     	dV, dim3(r2, r1, 1), eq_V, ot_val_V, ot_idx_V, ot_num_V, dEb_V, 512, &lrz_time, 0);
     cudaDeviceSynchronize();
     //printf("ot_num_V : %d\n", *ot_num_V);
+
+    auto end = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsed = end - start;
+	std::cout << "压缩运行时间: " << elapsed.count() << " 秒" << std::endl;
 
     //decompression U
     T* dU_decomp; cudaMalloc(&dU_decomp, r1 * r2 * sizeof(T));
@@ -646,6 +665,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaStreamDestroy(stream);
     */
 
+    cudaError_t err;
     printf("compute eq done\n");
     err = cudaGetLastError();
     if (err != cudaSuccess) {
