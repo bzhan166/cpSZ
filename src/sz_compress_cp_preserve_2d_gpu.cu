@@ -253,8 +253,6 @@ __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restri
     }
     __syncthreads();
 
-    //bottleneck is here
-    //Lambda has some error, u and v has 15 errors for each
     for (int i = 0; i < YSEQ; i++)
     {
         if(localRow<YSEQ*TileDim_Y-1 && localCol<TileDim_X-1){
@@ -336,7 +334,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaMemset(eb_gpu, max_pwr_eb, r2 * r1 * sizeof(T));
     
     // CPU code
-    
     const T * U_pos = U;
     const T * V_pos = V;
     T * eb_pos = eb;
@@ -424,7 +421,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaStreamDestroy(stream);
 
     //verify derive_eb
-    
     //cpu eb_u, eb_v
     const int base = 4;
 	T log2_of_base = log2(base);
@@ -499,7 +495,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     printf("eb_v_gpu: %f, eb_v: %f\n", eb_v_gpu[maxdiff_index], eb_v[maxdiff_index]);
     
 
-    // deal with eb =zero  
+    //deal with eb =zero  
     //U
     uint32_t* d_indices; cudaMalloc(&d_indices, r1 * r2 * sizeof(uint32_t));
     T* zero_U_data;
@@ -671,50 +667,8 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     }
 
     //copy back
-    //cudaMemcpy(eb_gpu, dEb, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
     cudaMemcpy(U_decomp,dU_decomp, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
     cudaMemcpy(V_decomp,dV_decomp, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
-
-    //Compute time:
-    //CPU time
-    /*
-    double t0,t1;
-    for (int i_count=0;i_count<10;i_count++){
-        t0=get_sec();
-        for (size_t i = 0; i < N; i++)
-        {
-            U_pos = U;
-            V_pos = V;
-            eb_pos = eb;
-            for(int i=0; i<r1-1; i++){
-                const T * U_row_pos = U_pos;
-                const T * V_row_pos = V_pos;
-                float * eb_row_pos = eb_pos;
-                for(int j=0; j<r2-1; j++){
-                    for(int k=0; k<2; k++){
-                        //printf("U_row_pos: %p, V_row_pos: %p, eb_row_pos: %p\n", U_row_pos, V_row_pos, eb_row_pos);
-                        auto X = (k == 0) ? X_upper : X_lower;
-                        auto offset = (k == 0) ? offset_upper : offset_lower;
-                        // reversed order!
-                        T max_cur_eb = gpu_max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
-                        	V_row_pos[offset[0]], V_row_pos[offset[1]], V_row_pos[offset[2]]);
-                        eb_row_pos[offset[0]] = MINF(eb_row_pos[offset[0]], max_cur_eb);
-                        eb_row_pos[offset[1]] = MINF(eb_row_pos[offset[1]], max_cur_eb);
-                        eb_row_pos[offset[2]] = MINF(eb_row_pos[offset[2]], max_cur_eb);
-                    }
-                    U_row_pos ++;
-                    V_row_pos ++;
-                    eb_row_pos ++;
-                }
-                U_pos += r2;
-                V_pos += r2;
-                eb_pos += r2;
-            }
-        }
-        t1=get_sec();
-        printf("Average CPU elasped time: %f second\n", (t1-t0)/N);
-    }
-    */
     
     //cudaFree
     cudaFree(eb_gpu);
@@ -731,58 +685,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaFree(zero_V_data);
     cudaFree(zero_V_indices);
 
-    //compression
-    /*
-    double * eb_u = (double *) malloc(num_elements * sizeof(double));
-    double * eb_v = (double *) malloc(num_elements * sizeof(double));
-    int * eb_quant_index = (int *) malloc(2*num_elements*sizeof(int));
-    int * eb_quant_index_pos = eb_quant_index;
-    const int base = 4;
-    double log2_of_base = log2(base);
-    const double threshold = std::numeric_limits<double>::epsilon();
-    for(int i=0; i<num_elements; i++){
-    	eb_u[i] = fabs(U[i]) * eb[i];
-    	*(eb_quant_index_pos ++) = eb_exponential_quantize(eb_u[i], base, log2_of_base, threshold);
-    	// *(eb_quant_index_pos ++) = eb_linear_quantize(eb_u[i], 1e-2);
-    	if(eb_u[i] < threshold) eb_u[i] = 0;
-    }
-    for(int i=0; i<num_elements; i++){
-    	eb_v[i] = fabs(V[i]) * eb[i];
-    	*(eb_quant_index_pos ++) = eb_exponential_quantize(eb_v[i], base, log2_of_base, threshold);
-    	// *(eb_quant_index_pos ++) = eb_linear_quantize(eb_v[i], 1e-2);
-    	if(eb_v[i] < threshold) eb_v[i] = 0;
-    }
-    free(eb);
-    printf("quantize eb done\n");
-    unsigned char * compressed_eb = (unsigned char *) malloc(2*num_elements*sizeof(int));
-    unsigned char * compressed_eb_pos = compressed_eb; 
-    Huffman_encode_tree_and_data(2*1024, eb_quant_index, 2*num_elements, compressed_eb_pos);
-    size_t compressed_eb_size = compressed_eb_pos - compressed_eb;
-    size_t compressed_u_size = 0;
-    size_t compressed_v_size = 0;
-    unsigned char * compressed_u = sz_compress_2d_with_eb(U, eb_u, r1, r2, compressed_u_size);
-    unsigned char * compressed_v = sz_compress_2d_with_eb(V, eb_v, r1, r2, compressed_v_size);
-    printf("eb_size = %ld, u_size = %ld, v_size = %ld\n", compressed_eb_size, compressed_u_size, compressed_v_size);
-    free(eb_u);
-    free(eb_v);
-    compressed_size = sizeof(int) + sizeof(size_t) + compressed_eb_size + sizeof(size_t) + compressed_u_size + sizeof(size_t) + compressed_v_size;
-    unsigned char * compressed = (unsigned char *) malloc(compressed_size);
-    unsigned char * compressed_pos = compressed;
-    write_variable_to_dst(compressed_pos, base);
-    write_variable_to_dst(compressed_pos, threshold);
-    write_variable_to_dst(compressed_pos, compressed_eb_size);
-    write_variable_to_dst(compressed_pos, compressed_u_size);
-    write_variable_to_dst(compressed_pos, compressed_v_size);
-    write_array_to_dst(compressed_pos, compressed_eb, compressed_eb_size);
-    write_array_to_dst(compressed_pos, compressed_u, compressed_u_size);
-    printf("compressed_pos = %ld\n", compressed_pos - compressed);
-    write_array_to_dst(compressed_pos, compressed_v, compressed_v_size);
-    free(compressed_eb);
-    free(compressed_u);
-    free(compressed_v);
-    */
-
-    //free(eb);
     return 0;
 }
 
@@ -812,36 +714,9 @@ int main(int argc, char ** argv){
     float * V_decomp = (float *) malloc(r1 * r2 * sizeof(float));
 
     unsigned char * result = sz_compress_cp_preserve_2d_offline_gpu(U, V, r1, r2, result_size, false, max_eb, ot_val_U, ot_idx_U, ot_num_U, ot_val_V, ot_idx_V, ot_num_V, U_decomp, V_decomp);
-    // unsigned char * result = sz_compress_cp_preserve_2d_offline_log(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online_gpu(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz_compress_cp_preserve_2d_online_abs(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz_compress_cp_preserve_2d_online_abs_relax_FN(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz_compress_cp_preserve_2d_bilinear_online_log(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz_compress_cp_preserve_2d_online_log(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz3_compress_cp_preserve_2d_online_abs(U, V, r1, r2, result_size, false, max_eb);
 
-    /*
-    unsigned char * result_after_lossless = NULL;
-    size_t lossless_outsize = sz_lossless_compress(ZSTD_COMPRESSOR, 3, result, result_size, &result_after_lossless);
-    err = clock_gettime(CLOCK_REALTIME, &end);
-    cout << "Compression time: " << (double)(end.tv_sec - start.tv_sec) + (double)(end.tv_nsec - start.tv_nsec)/(double)1000000000 << "s" << endl;
-    cout << "Compressed size = " << lossless_outsize << ", ratio = " << (2*num_elements*sizeof(float)) * 1.0/lossless_outsize << endl;
-    free(result);
-    // exit(0);
-    err = clock_gettime(CLOCK_REALTIME, &start);
-    size_t lossless_output = sz_lossless_decompress(ZSTD_COMPRESSOR, result_after_lossless, lossless_outsize, &result, result_size);
-    float * dec_U = NULL;
-    float * dec_V = NULL;
 
-    sz_decompress_cp_preserve_2d_offline<float>(result, r1, r2, dec_U, dec_V);
-    // sz_decompress_cp_preserve_2d_offline_log<float>(result, r1, r2, dec_U, dec_V);
-    // sz_decompress_cp_preserve_2d_online<float>(result, r1, r2, dec_U, dec_V);
-    // sz_decompress_cp_preserve_2d_online_log<float>(result, r1, r2, dec_U, dec_V);
-    // sz3_decompress_cp_preserve_2d_online<float>(result, r1, r2, dec_U, dec_V);
-    err = clock_gettime(CLOCK_REALTIME, &end);
-    cout << "Decompression time: " << (double)(end.tv_sec - start.tv_sec) + (double)(end.tv_nsec - start.tv_nsec)/(double)1000000000 << "s" << endl;
-    free(result_after_lossless);
-    */
     verify(U, U_decomp, num_elements);
     verify(V, V_decomp, num_elements);
     
@@ -852,13 +727,13 @@ int main(int argc, char ** argv){
     free(result);
     free(U);
     free(V);
+    free(U_decomp);
+    free(V_decomp);
     cudaFree(ot_val_U);
     cudaFree(ot_idx_U);
     cudaFree(ot_num_U);
     cudaFree(ot_val_V);
     cudaFree(ot_idx_V);
     cudaFree(ot_num_V);
-    
-    //free(dec_U);
-    //free(dec_V);
+
 }
