@@ -49,37 +49,6 @@ struct IsZero {
     }
 };
 
-template <typename T>
-struct IsNotQuantizable {
-    const T* in_data;
-    const T* eb_list;
-    T radius;
-    int r1, r2;
-
-    __host__ __device__
-    IsNotQuantizable(const T* _in_data, const T* _eb_list, T _radius, int _r1, int _r2)
-        : in_data(_in_data), eb_list(_eb_list), radius(_radius), r1(_r1), r2(_r2) {}
-
-    __device__
-    bool operator()(const int& idx) const {
-        T eb = eb_list[idx];
-        if (eb == T(0)) return true;
-
-        T ebx2_r = T(0.5) / eb;
-
-        int x = idx % r2;
-        int y = idx / r2;
-
-        T center  = round(in_data[idx] * ebx2_r);
-        T left    = (x > 0)            ? round(in_data[idx - 1]       * ebx2_r) : 0;
-        T top     = (y > 0)            ? round(in_data[idx - r2]      * ebx2_r) : 0;
-        T topleft = (x > 0 && y > 0)   ? round(in_data[idx - r2 - 1]  * ebx2_r) : 0;
-
-        T delta = center - (left + top - topleft);
-        return fabs(delta) >= radius;
-    }
-};
-
 template<typename T>
 [[nodiscard]] constexpr inline T max_eb_to_keep_sign_2d_offline_2(const T volatile u0, const T volatile u1, const int degree=2){
     T positive = 0;
