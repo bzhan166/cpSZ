@@ -50,6 +50,18 @@ struct IsZero {
 };
 
 template<typename T>
+struct EBTransform
+{
+    T threshold;
+    EBTransform(T t) : threshold(t) {}
+
+    __host__ __device__
+    T operator()(const uint32_t& x) const {
+        return (1ULL << (2 * x)) * threshold;
+    }
+};
+
+template<typename T>
 [[nodiscard]] constexpr inline T max_eb_to_keep_sign_2d_offline_2(const T volatile u0, const T volatile u1, const int degree=2){
     T positive = 0;
     T negative = 0;
@@ -222,7 +234,8 @@ template<typename T>
 
 //version 3, single thread muti-compute 32*32 data mapto 32*8
 template <typename T, int TileDim_X = BLOCKSIZE_X, int TileDim_Y = BLOCKSIZE_Y>
-__global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restrict__ dV, T* __restrict__ dEb, T* __restrict__  dEb_U,  T* __restrict__ dEb_V, int r1, int r2, T max_pwr_eb){
+__global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restrict__ dV, T* __restrict__ dEb, T* __restrict__  dEb_U,  T* __restrict__ dEb_V, 
+        uint32_t* __restrict eq_EB_U, uint32_t* __restrict eq_EB_V, int r1, int r2, T max_pwr_eb){
     constexpr auto YSEQ = TileDim_X / TileDim_Y;
     __shared__ T buf_U[TileDim_Y * YSEQ][TileDim_X+1];
     __shared__ T buf_V[TileDim_Y * YSEQ][TileDim_X+1];
@@ -294,21 +307,33 @@ __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restri
         if(row<r1-2 && col<r2-2 && localRow<YSEQ*TileDim_Y-2 && localCol<TileDim_X-2)
         {
             T threshold = (T)(1.0 / (1 << 20));
+            uint id;
             auto temp = buf_eb[localRow][localCol] * fabs(buf_U[localRow+1][localCol+1]);
-            if(temp <= threshold) temp = 0;
+            if(temp <= threshold){
+                temp = 0;
+                id = 0;
+            }
             if(temp > threshold){
-                uint id = log2(temp / threshold)/2.0;
+                id = log2(temp / threshold)/2.0;
                 temp = (T)(1ULL << (2 * id)) * threshold;
             }
             dEb_U[(row+1) * r2 + (col+1)] = temp;
+            eq_EB_U[(row+1) * r2 + (col+1)] = id;
+            if((row+1) * r2 + (col+1)==363005){
+                printf("id: %d, temp:%f, dEb_U: %f, eq_EB_U: %d\n", id, temp, dEb_U[(row+1) * r2 + (col+1)], eq_EB_U[(row+1) * r2 + (col+1)]);
+            }
 
             temp = buf_eb[localRow][localCol] * fabs(buf_V[localRow+1][localCol+1]);
-            if(temp <= threshold) temp = 0;
+            if(temp <= threshold){
+                temp = 0;
+                id = 0;
+            }
             if(temp > threshold){
-                uint id = log2(temp / threshold)/2.0;
+                id = log2(temp / threshold)/2.0;
                 temp = (T)(1ULL << (2 * id)) * threshold;
             }
             dEb_V[(row+1) * r2 + (col+1)] =  temp;
+            eq_EB_V[(row+1) * r2 + (col+1)] = id;
         }
     }
     __syncthreads();
@@ -318,6 +343,8 @@ __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restri
         if((row == 0 || col ==0 || row==r1-1 || col == r2-1)&&(row<r1-1 && col<r2-1)){
             dEb_U[row * r2 + col] = 0;
             dEb_V[row * r2 + col] = 0;
+            eq_EB_U[row * r2 + col] = 0;
+            eq_EB_V[row * r2 + col] = 0;
         }
     }
 }
@@ -329,7 +356,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         T* ot_val_U, uint32_t* ot_idx_U, uint32_t* ot_num_U, T* ot_val_V, uint32_t* ot_idx_V, uint32_t* ot_num_V, uint32_t* h_ot_num_U, uint32_t* h_ot_num_V, T* U_decomp, T* V_decomp){
     
     #define RUN_DERIVE_EB 1
-        #define VERFIY_DERIVE_EB 0
+        #define VERFIY_DERIVE_EB 1
         #define TEST_DERIVE_EB 0
         #define DEAL_WITH_LAND_DATA 1
             #define TEST_DEAL_WITH_LAND_DATA 0
@@ -347,6 +374,8 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     size_t num_elements = r1 * r2;
     T *eb_gpu;
     T *dU, *dV, *dEb_U, *dEb_V;
+    uint32_t *eq_EB_U, *eq_EB_V;
+    const T threshold = (T)(1.0 / (1 << 20));
     cudaStream_t stream;
     cudaEvent_t a, b;
     dim3 blockSize_v3(BLOCKSIZE_X, BLOCKSIZE_Y, 1);
@@ -369,6 +398,8 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaMalloc(&dV, r1 * r2 * sizeof(T));
     cudaMalloc(&dEb_U, r1 * r2 * sizeof(T));
     cudaMalloc(&dEb_V, r1 * r2 * sizeof(T));
+    cudaMalloc(&eq_EB_U, r1 * r2 * sizeof(uint32_t));
+    cudaMalloc(&eq_EB_V, r1 * r2 * sizeof(uint32_t));
     cudaMalloc(&data_indices, r1 * r2 * sizeof(uint32_t));
     cudaMalloc(&ebIsZero_U_data, r1 * r2 * sizeof(T));
     cudaMalloc(&ebIsZero_U_indices, r1 * r2 * sizeof(uint32_t));
@@ -386,7 +417,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         printf("\nRUN_DERIVE_EB\n");
         cudaMemset(eb_gpu, max_pwr_eb, r2 * r1 * sizeof(T));
         printf("gridSize_v3: %d, %d\n", gridSize_v3.x, gridSize_v3.y);
-        derive_eb_offline_v3<<<gridSize_v3, blockSize_v3>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
+        derive_eb_offline_v3<<<gridSize_v3, blockSize_v3>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_EB_U, eq_EB_V, r1, r2, max_pwr_eb);
         cudaDeviceSynchronize();
         printf("compute V3 eb_gpu done\n");
         printf("\n");
@@ -436,7 +467,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
             //compute eb_u, eb_v
             const int base = 4;
             T log2_of_base = log2(base);
-            const T threshold = (T)(1.0 / (1 << 20));
             T * eb_u = (T *) malloc(num_elements * sizeof(T));
             T * eb_v = (T *) malloc(num_elements * sizeof(T));
             for(int i=0; i<num_elements; i++){
@@ -450,9 +480,9 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                 if(eb_v[i] < threshold) eb_v[i] = 0;
             }
             //verfiy eb_u_gpu
-            T * eb_u_gpu = (T *) malloc(num_elements * sizeof(T));;
+            T * eb_u_gpu = (T *) malloc(num_elements * sizeof(T));
             cudaMemcpy(eb_u_gpu, dEb_U, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
-            T * eb_v_gpu = (T *) malloc(num_elements * sizeof(T));;
+            T * eb_v_gpu = (T *) malloc(num_elements * sizeof(T));
             cudaMemcpy(eb_v_gpu, dEb_V, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
             double diff = 0.0;
             double maxdiff = 0.0;
@@ -473,11 +503,6 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                     }
                 }
             }
-            int count_zero = 0;
-            for (int i = 0; i < r1 * r2; ++i) {
-                if(eb_u_gpu[i] == 0) count_zero++;
-            }
-            //printf("count_zero in the data: %d\n", count_zero);
             printf("maxdiff of u: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
             printf("eb_u_gpu: %f, eb_u: %f\n", eb_u_gpu[maxdiff_index], eb_u[maxdiff_index]);
             //verfiy eb_v_gpu
@@ -502,6 +527,11 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
             }
             printf("maxdiff of v: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
             printf("eb_v_gpu: %f, eb_v: %f\n", eb_v_gpu[maxdiff_index], eb_v[maxdiff_index]); 
+            // int count_zero = 0;
+            // for (int i = 0; i < r1 * r2; ++i) {
+            //     if(eb_u_gpu[i] == 0) count_zero++;
+            // }
+            // printf("count_zero in the data: %d\n", count_zero);
             printf("\n"); 
         }
 
@@ -516,7 +546,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                 {
                     float temp;
                     cudaEventRecord(a, stream);
-                    derive_eb_offline_v3<<<gridSize_v3, blockSize_v3, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
+                    derive_eb_offline_v3<<<gridSize_v3, blockSize_v3, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_EB_U, eq_EB_V, r1, r2, max_pwr_eb);
                     //cudaDeviceSynchronize();
                     cudaEventRecord(b, stream);
                     cudaStreamSynchronize(stream);
@@ -540,6 +570,8 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                     if (dU[i] == 0 && dV[i] == 0) {
                         dEb_U[i] = max_pwr_eb;
                         dEb_V[i] = max_pwr_eb;
+                        eq_EB_U[i] = log2(max_pwr_eb / threshold)/2.0;
+                        eq_EB_V[i] = log2(max_pwr_eb / threshold)/2.0;
                     }
                 }
             );
@@ -565,6 +597,8 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                                 if (dU[i] == 0 && dV[i] == 0) {
                                     dEb_U[i] = max_pwr_eb;
                                     dEb_V[i] = max_pwr_eb;
+                                    eq_EB_U[i] = log2(max_pwr_eb / threshold)/2.0;
+                                    eq_EB_V[i] = log2(max_pwr_eb / threshold)/2.0;
                                 }
                             }
                         );
@@ -590,12 +624,14 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
             end_idx = thrust::copy_if(thrust::device, data_indices, data_indices + r1*r2, dEb_U, ebIsZero_U_indices, IsZero<T>());
             zero_eb_U_count = end_it - ebIsZero_U_data;
             thrust::transform(thrust::device, dEb_U, dEb_U + r1*r2, dEb_U, ReplaceZero(max_pwr_eb));
+            thrust::transform(thrust::device, eq_EB_U, eq_EB_U + r1*r2, eq_EB_U, ReplaceZero(uint(log2(max_pwr_eb / threshold)/2.0)));
             printf("zero_eb_U_count: %d\n", zero_eb_U_count);
             //V
             end_it = thrust::copy_if(thrust::device, dV, dV + r1*r2, dEb_V, ebisZero_V_data, IsZero<T>());
             end_idx = thrust::copy_if(thrust::device, data_indices, data_indices + r1*r2, dEb_V, ebIsZero_V_indices, IsZero<T>());
             zero_eb_V_count = end_it - ebisZero_V_data;
             thrust::transform(thrust::device, dEb_V, dEb_V + r1*r2, dEb_V, ReplaceZero(max_pwr_eb));
+            thrust::transform(thrust::device, eq_EB_V, eq_EB_V + r1*r2, eq_EB_V, ReplaceZero(uint(log2(max_pwr_eb / threshold)/2.0)));
             printf("zero_eb_V_count: %d\n", zero_eb_V_count);   
             printf("\n"); 
             
@@ -615,11 +651,13 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                         auto end_idx = thrust::copy_if(thrust::device, data_indices, data_indices + r1*r2, dEb_U, ebIsZero_U_indices, IsZero<T>());
                         zero_eb_U_count = end_it - ebIsZero_U_data;
                         thrust::transform(thrust::device, dEb_U, dEb_U + r1*r2, dEb_U, ReplaceZero(max_pwr_eb));
+                        thrust::transform(thrust::device, eq_EB_U, eq_EB_U + r1*r2, eq_EB_U, ReplaceZero(uint(log2(max_pwr_eb / threshold)/2.0)));
 
                         end_it = thrust::copy_if(thrust::device, dV, dV + r1*r2, dEb_V, ebisZero_V_data, IsZero<T>());
                         end_idx = thrust::copy_if(thrust::device, data_indices, data_indices + r1*r2, dEb_V, ebIsZero_V_indices, IsZero<T>());
                         zero_eb_V_count = end_it - ebisZero_V_data;
                         thrust::transform(thrust::device, dEb_V, dEb_V + r1*r2, dEb_V, ReplaceZero(max_pwr_eb));
+                        thrust::transform(thrust::device, eq_EB_V, eq_EB_V + r1*r2, eq_EB_V, ReplaceZero(uint(log2(max_pwr_eb / threshold)/2.0)));
 
                         //cudaDeviceSynchronize();
                         cudaEventRecord(b, stream);
@@ -739,18 +777,39 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                 // 1. 从 GPU 拷贝到 Host
                 uint16_t* h_eq_U = new uint16_t[r2 * r1];
                 uint16_t* h_eq_V = new uint16_t[r2 * r1];
+                uint32_t* h_eq_EB_U = new uint32_t[r2 * r1];
+                uint32_t* h_eq_EB_V = new uint32_t[r2 * r1];
                 cudaMemcpy(h_eq_U, eq_U, r2 * r1 * sizeof(uint16_t), cudaMemcpyDeviceToHost);
                 cudaMemcpy(h_eq_V, eq_V, r2 * r1 * sizeof(uint16_t), cudaMemcpyDeviceToHost);
+                cudaMemcpy(h_eq_EB_U, eq_EB_U, r2 * r1 * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+                cudaMemcpy(h_eq_EB_V, eq_EB_V, r2 * r1 * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+
+                int count_zero = 0;
+                for(int i = 0; i < r1 * r2; i++){
+                    if(h_eq_EB_U[i]<std::numeric_limits<T>::epsilon()){
+                        count_zero++;
+                    }
+                }
+                printf("count_zero in the data: %d\n", count_zero);
+
                 // 2. 写入 .dat 文件
                 std::ofstream outU("eq_U.dat", std::ios::out | std::ios::binary);
                 outU.write(reinterpret_cast<char*>(h_eq_U), r2 * r1 * sizeof(uint16_t));
                 outU.close();
+                std::ofstream outEB_U("eq_EB_U.dat", std::ios::out | std::ios::binary);
+                outEB_U.write(reinterpret_cast<char*>(h_eq_EB_U), r2 * r1 * sizeof(uint32_t));
+                outEB_U.close();
                 std::ofstream outV("eq_V.dat", std::ios::out | std::ios::binary);
                 outV.write(reinterpret_cast<char*>(h_eq_V), r2 * r1 * sizeof(uint16_t));
                 outV.close();
+                std::ofstream outEB_V("eq_EB_V.dat", std::ios::out | std::ios::binary);
+                outEB_V.write(reinterpret_cast<char*>(h_eq_EB_V), r2 * r1 * sizeof(uint32_t));
+                outEB_V.close();
                 // 3. 释放内存
                 delete[] h_eq_U;
                 delete[] h_eq_V;
+                delete[] h_eq_EB_U;
+                delete[] h_eq_EB_V;
                 printf("finished write data\n");
                 printf("\n");
             }
@@ -767,13 +826,15 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                             float temp;
                             cudaEventRecord(a, stream);
                             {
-                                derive_eb_offline_v3<<<gridSize_v3, blockSize_v3, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, r1, r2, max_pwr_eb);
+                                derive_eb_offline_v3<<<gridSize_v3, blockSize_v3, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_EB_U, eq_EB_V, r1, r2, max_pwr_eb);
                                 thrust::for_each(
                                     idx_first, idx_last,
                                     [=] __device__ (size_t i) {
                                         if (dU[i] == 0 && dV[i] == 0) {
                                             dEb_U[i] = max_pwr_eb;
                                             dEb_V[i] = max_pwr_eb;
+                                            eq_EB_U[i] = log2(max_pwr_eb / threshold)/2.0;
+                                            eq_EB_V[i] = log2(max_pwr_eb / threshold)/2.0;
                                         }
                                     }
                                 );
@@ -781,8 +842,10 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
                                 end_it = thrust::copy_if(thrust::device, dU, dU + r1*r2, dEb_U, ebIsZero_U_data, IsZero<T>());
                                 end_idx = thrust::copy_if(thrust::device, data_indices, data_indices + r1*r2, dEb_U, ebIsZero_U_indices, IsZero<T>());
                                 thrust::transform(thrust::device, dEb_U, dEb_U + r1*r2, dEb_U, ReplaceZero(max_pwr_eb));
+                                thrust::transform(thrust::device, eq_EB_U, eq_EB_U + r1*r2, eq_EB_U, ReplaceZero(uint(log2(max_pwr_eb / threshold)/2.0)));
                                 end_it = thrust::copy_if(thrust::device, dV, dV + r1*r2, dEb_V, ebisZero_V_data, IsZero<T>());
                                 end_idx = thrust::copy_if(thrust::device, data_indices, data_indices + r1*r2, dEb_V, ebIsZero_V_indices, IsZero<T>());
+                                thrust::transform(thrust::device, eq_EB_V, eq_EB_V + r1*r2, eq_EB_V, ReplaceZero(uint(log2(max_pwr_eb / threshold)/2.0)));
                                 thrust::transform(thrust::device, dEb_V, dEb_V + r1*r2, dEb_V, ReplaceZero(max_pwr_eb));
                                 cudaMemset(eq_U, 0, r2 * r1 * sizeof(uint16_t));
                                 psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, uint16_t>(
@@ -811,28 +874,81 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         }
     }  
 
-    //decompression U
-    T* dU_decomp; cudaMalloc(&dU_decomp, r1 * r2 * sizeof(T));
-    //move ov_val to dU_decomp accrording to ot_idx
-    cudaMemcpy(h_ot_num_U, ot_num_U, sizeof(uint32_t), cudaMemcpyDeviceToHost);
-    thrust::scatter(thrust::device, ot_val_U, ot_val_U + *h_ot_num_U, ot_idx_U, dU_decomp);
-    //decompression kernel
-    psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
-        eq_U, /*input*/dU_decomp, /*output*/dU_decomp, dim3(r2, r1, 1), dEb_U, RADIUS, &lrz_time, 0);
-    cudaDeviceSynchronize();
-    //move ebIsZero_U_data back to dU
-    thrust::scatter(thrust::device, ebIsZero_U_data, ebIsZero_U_data + zero_eb_U_count, ebIsZero_U_indices, dU_decomp);
-    //decompression V
-    T* dV_decomp; cudaMalloc(&dV_decomp, r1 * r2 * sizeof(T));
-    //move ov_val to dU_decomp accrording to ot_idx
-    cudaMemcpy(h_ot_num_V, ot_num_V, sizeof(uint32_t), cudaMemcpyDeviceToHost);
-    thrust::scatter(thrust::device, ot_val_V, ot_val_V + *h_ot_num_V, ot_idx_V, dV_decomp);
-    //decompression kernel
-    psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
-        eq_V, /*input*/dV_decomp, /*output*/dV_decomp, dim3(r2, r1, 1), dEb_V, RADIUS, &lrz_time, 0);
-    cudaDeviceSynchronize();
-    //move ebisZero_V_data back to dV
-    thrust::scatter(thrust::device, ebisZero_V_data, ebisZero_V_data + zero_eb_U_count, ebIsZero_V_indices, dV_decomp);
+    T * h_EB_U_decomp = (T *) malloc(num_elements * sizeof(T));
+    T * h_EB_V_decomp = (T *) malloc(num_elements * sizeof(T));
+    uint32_t *h_eq_EB_U = (uint32_t *) malloc(num_elements * sizeof(T));
+    uint32_t *h_eq_EB_V = (uint32_t *) malloc(num_elements * sizeof(T));
+    cudaMemcpy(h_eq_EB_U, eq_EB_U, r1 * r2 * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_eq_EB_V, eq_EB_V, r1 * r2 * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+    uint i = log2(max_pwr_eb / threshold)/2.0;
+    printf("max_pwr_eb: %f, threshold: %f, i: %d\n", max_pwr_eb, threshold, i);
+    for(int i = 0; i < r1 * r2; i++){
+        h_EB_U_decomp[i] = (T)(1ULL << (2 * h_eq_EB_U[i])) * threshold;
+        h_EB_V_decomp[i] = (T)(1ULL << (2 * h_eq_EB_V[i])) * threshold;
+        if(i==363005){
+            printf("h_eq_EB_U[%d]: %d, h_eq_EB_V[%d]: %d\n", i, h_eq_EB_U[i], i, h_eq_EB_V[i]);
+            printf("h_EB_U_decomp[%d]: %f, h_EB_V_decomp[%d]: %f\n", i, h_EB_U_decomp[i], i, h_EB_V_decomp[i]);
+        }
+    }
+    T * eb_u_gpu = (T *) malloc(num_elements * sizeof(T));
+    cudaMemcpy(eb_u_gpu, dEb_U, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
+    T * eb_v_gpu = (T *) malloc(num_elements * sizeof(T));
+    cudaMemcpy(eb_v_gpu, dEb_V, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
+    int count_zero = 0;
+    for(int i = 0; i < r1 * r2; i++){
+        if(std::numeric_limits<T>::epsilon()>h_EB_U_decomp[i]){
+            count_zero++;
+        }
+    }
+    printf("count_zero in the data: %d\n", count_zero);
+    double diff = 0.0;
+    double maxdiff = 0.0;
+    int count=0;
+    int maxdiff_index = 0;
+    for (int i = 1; i < r1-1; i++){
+        for(int j = 1; j < r2-1; j++){
+            diff = fabs(eb_u_gpu[i*r2+j] - h_EB_U_decomp[i*r2+j]);
+            if(diff > maxdiff)
+            { 
+                maxdiff = diff;
+                maxdiff_index = i*r2+j;    
+            }
+            if (diff > std::numeric_limits<T>::epsilon()) {
+                //printf("error. eb_u_gpu: %5.2f, eb_u: %5.2f,%d\n", eb_u_gpu[i],eb_u[i],i);
+                //break;
+                count++;
+            }
+        }
+    }
+    printf("maxdiff of u: %f, maxdiff_index: %d, error count: %d\n", maxdiff, maxdiff_index, count);
+    printf("eb_u_gpu: %f, EB_U_decomp: %f\n", eb_u_gpu[maxdiff_index], h_EB_U_decomp[maxdiff_index]);
+    free(h_EB_U_decomp);
+    free(h_EB_V_decomp);
+    free(h_eq_EB_U);
+    free(h_eq_EB_V);
+
+    // //decompression U
+    // T* dU_decomp; cudaMalloc(&dU_decomp, r1 * r2 * sizeof(T));
+    // //move ov_val to dU_decomp accrording to ot_idx
+    // cudaMemcpy(h_ot_num_U, ot_num_U, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+    // thrust::scatter(thrust::device, ot_val_U, ot_val_U + *h_ot_num_U, ot_idx_U, dU_decomp);
+    // //decompression kernel
+    // psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
+    //     eq_U, /*input*/dU_decomp, /*output*/dU_decomp, dim3(r2, r1, 1), dEB_U_decomp, RADIUS, &lrz_time, 0);
+    // cudaDeviceSynchronize();
+    // //move ebIsZero_U_data back to dU
+    // thrust::scatter(thrust::device, ebIsZero_U_data, ebIsZero_U_data + zero_eb_U_count, ebIsZero_U_indices, dU_decomp);
+    // //decompression V
+    // T* dV_decomp; cudaMalloc(&dV_decomp, r1 * r2 * sizeof(T));
+    // //move ov_val to dU_decomp accrording to ot_idx
+    // cudaMemcpy(h_ot_num_V, ot_num_V, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+    // thrust::scatter(thrust::device, ot_val_V, ot_val_V + *h_ot_num_V, ot_idx_V, dV_decomp);
+    // //decompression kernel
+    // psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
+    //     eq_V, /*input*/dV_decomp, /*output*/dV_decomp, dim3(r2, r1, 1), dEB_V_decomp, RADIUS, &lrz_time, 0);
+    // cudaDeviceSynchronize();
+    // //move ebisZero_V_data back to dV
+    // thrust::scatter(thrust::device, ebisZero_V_data, ebisZero_V_data + zero_eb_U_count, ebIsZero_V_indices, dV_decomp);
 
     // //test decompression U,V
     // cudaStreamCreate(&stream);
@@ -844,17 +960,17 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     //         float temp;
     //         cudaEventRecord(a, stream);
     //         //move ov_val to dU_decomp accrording to ot_idx
-    //         thrust::scatter(thrust::device, ot_val_U, ot_val_U + h_, ot_idx_U, dU_decomp);
+    //         thrust::scatter(thrust::device, ot_val_U, ot_val_U + *h_ot_num_U, ot_idx_U, dU_decomp);
     //         //decompression kernel
     //         psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
-    //             eq_U, /*input*/dU_decomp, /*output*/dU_decomp, dim3(r2, r1, 1), debU_decomp, RADIUS, &lrz_time, 0);
+    //             eq_U, /*input*/dU_decomp, /*output*/dU_decomp, dim3(r2, r1, 1), dEB_U_decomp, RADIUS, &lrz_time, 0);
     //         //move ebIsZero_U_data back to dU
     //         thrust::scatter(thrust::device, ebIsZero_U_data, ebIsZero_U_data + zero_eb_U_count, ebIsZero_U_indices, dU_decomp);
     //         //move ov_val to dU_decomp accrording to ot_idx
-    //         thrust::scatter(thrust::device, ot_val_V, ot_val_V + *ot_num_V, ot_idx_V, dV_decomp);
+    //         thrust::scatter(thrust::device, ot_val_V, ot_val_V + *h_ot_num_V, ot_idx_V, dV_decomp);
     //         //decompression kernel
     //         psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
-    //             eq_V, /*input*/dV_decomp, /*output*/dV_decomp, dim3(r2, r1, 1), debV_decomp, RADIUS, &lrz_time, 0);
+    //             eq_V, /*input*/dV_decomp, /*output*/dV_decomp, dim3(r2, r1, 1), dEB_V_decomp, RADIUS, &lrz_time, 0);
     //         //move ebisZero_V_data back to dV
     //         thrust::scatter(thrust::device, ebisZero_V_data, ebisZero_V_data + zero_eb_U_count, ebIsZero_V_indices, dV_decomp);
     //         //cudaDeviceSynchronize();
@@ -877,8 +993,8 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
         cudaFree(dV);
         cudaFree(eq_U);
         cudaFree(eq_V);
-        cudaFree(dU_decomp);
-        cudaFree(dV_decomp);
+        // cudaFree(dU_decomp);
+        // cudaFree(dV_decomp);
         cudaFree(dEb_U);
         cudaFree(dEb_V);
         cudaFree(ebIsZero_U_data);
@@ -889,8 +1005,8 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     }
 
     //copy back
-    cudaMemcpy(U_decomp,dU_decomp, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
-    cudaMemcpy(V_decomp,dV_decomp, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
+    // cudaMemcpy(U_decomp,dU_decomp, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
+    // cudaMemcpy(V_decomp,dV_decomp, r1 * r2 * sizeof(T), cudaMemcpyDeviceToHost);
     
     //cudaFree
     cudaFree(eb_gpu);
@@ -898,10 +1014,12 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V, size_t r1, size
     cudaFree(dV);
     cudaFree(eq_U);
     cudaFree(eq_V);
-    cudaFree(dU_decomp);
-    cudaFree(dV_decomp);
+    // cudaFree(dU_decomp);
+    // cudaFree(dV_decomp);
     cudaFree(dEb_U);
     cudaFree(dEb_V);
+    cudaFree(eq_EB_U);
+    cudaFree(eq_EB_V);
     cudaFree(ebIsZero_U_data);
     cudaFree(ebIsZero_U_indices);
     cudaFree(ebisZero_V_data);
@@ -937,7 +1055,8 @@ int main(int argc, char ** argv){
     float * U_decomp = (float *) malloc(r1 * r2 * sizeof(float));
     float * V_decomp = (float *) malloc(r1 * r2 * sizeof(float));
 
-    unsigned char * result = sz_compress_cp_preserve_2d_offline_gpu(U, V, r1, r2, result_size, false, max_eb, ot_val_U, ot_idx_U, ot_num_U, ot_val_V, ot_idx_V, ot_num_V, h_ot_num_U, h_ot_num_V, U_decomp, V_decomp);
+    unsigned char * result = sz_compress_cp_preserve_2d_offline_gpu(U, V, r1, r2, result_size, false, max_eb, 
+        ot_val_U, ot_idx_U, ot_num_U, ot_val_V, ot_idx_V, ot_num_V, h_ot_num_U, h_ot_num_V, U_decomp, V_decomp);
     // unsigned char * result = sz_compress_cp_preserve_2d_online_gpu(U, V, r1, r2, result_size, false, max_eb);
 
     // verify(U, U_decomp, num_elements);
