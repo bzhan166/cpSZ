@@ -1112,6 +1112,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
         cudaFree(ebIsZero_U_indices);
         cudaFree(ebisZero_V_data);
         cudaFree(ebIsZero_V_indices);
+        cudaFree(data_indices);
         return 0;
     }
 
@@ -1127,12 +1128,11 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
     cudaFree(dV_decomp);
     cudaFree(dEb_U);
     cudaFree(dEb_V);
-    cudaFree(eq_dEb_U);
-    cudaFree(eq_dEb_V);
     cudaFree(ebIsZero_U_data);
     cudaFree(ebIsZero_U_indices);
     cudaFree(ebisZero_V_data);
     cudaFree(ebIsZero_V_indices);
+    cudaFree(data_indices);
 
     return 0;
 }
