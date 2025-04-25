@@ -997,7 +997,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
 
     //decompression deb_U, deb_V
     T* dEb_U_dcomp; cudaMalloc(&dEb_U_dcomp, r1 * r2 * sizeof(T));
-    T* deb_V_dcomp; cudaMalloc(&deb_V_dcomp, r1 * r2 * sizeof(T));
+    T* dEb_V_dcomp; cudaMalloc(&dEb_V_dcomp, r1 * r2 * sizeof(T));
     thrust::for_each(
         idx_first, idx_last,
         [=] __device__ (size_t i) {
@@ -1008,10 +1008,10 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
                 dEb_U_dcomp[i] = (T)(1ULL << (2 * eq_dEb_U[i])) * threshold;
             }
             if(eq_dEb_V==0){
-                deb_V_dcomp[i] = 0;
+                dEb_V_dcomp[i] = 0;
             }
             if(eq_dEb_V!=0){
-                deb_V_dcomp[i] = (T)(1ULL << (2 * eq_dEb_V[i])) * threshold;
+                dEb_V_dcomp[i] = (T)(1ULL << (2 * eq_dEb_V[i])) * threshold;
             }
         }
     );
@@ -1035,43 +1035,66 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
     thrust::scatter(thrust::device, ot_val_V, ot_val_V + *h_ot_num_V, ot_idx_V, dV_decomp);
     //decompression kernel
     psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
-        eq_V, /*input*/dV_decomp, /*output*/dV_decomp, dim3(r2, r1, 1), deb_V_dcomp, RADIUS, &lrz_time, 0);
+        eq_V, /*input*/dV_decomp, /*output*/dV_decomp, dim3(r2, r1, 1), dEb_V_dcomp, RADIUS, &lrz_time, 0);
     cudaDeviceSynchronize();
     //move ebisZero_V_data back to dV
     thrust::scatter(thrust::device, ebisZero_V_data, ebisZero_V_data + zero_eb_U_count, ebIsZero_V_indices, dV_decomp);
 
-    // //test decompression U,V
-    // cudaStreamCreate(&stream);
-    // cudaEventCreate(&a), cudaEventCreate(&b);
-    // for (int i_count=0;i_count<3;i_count++){
-    //     float ms = 0.0;
-    //     for (size_t i = 0; i < N; i++)
-    //     {
-    //         float temp;
-    //         cudaEventRecord(a, stream);
-    //         //move ov_val to dU_decomp accrording to ot_idx
-    //         thrust::scatter(thrust::device, ot_val_U, ot_val_U + *h_ot_num_U, ot_idx_U, dU_decomp);
-    //         //decompression kernel
-    //         psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
-    //             eq_U, /*input*/dU_decomp, /*output*/dU_decomp, dim3(r2, r1, 1), dEB_U_decomp, RADIUS, &lrz_time, 0);
-    //         //move ebIsZero_U_data back to dU
-    //         thrust::scatter(thrust::device, ebIsZero_U_data, ebIsZero_U_data + zero_eb_U_count, ebIsZero_U_indices, dU_decomp);
-    //         //move ov_val to dU_decomp accrording to ot_idx
-    //         thrust::scatter(thrust::device, ot_val_V, ot_val_V + *h_ot_num_V, ot_idx_V, dV_decomp);
-    //         //decompression kernel
-    //         psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
-    //             eq_V, /*input*/dV_decomp, /*output*/dV_decomp, dim3(r2, r1, 1), dEB_V_decomp, RADIUS, &lrz_time, 0);
-    //         //move ebisZero_V_data back to dV
-    //         thrust::scatter(thrust::device, ebisZero_V_data, ebisZero_V_data + zero_eb_U_count, ebIsZero_V_indices, dV_decomp);
-    //         //cudaDeviceSynchronize();
-    //         cudaEventRecord(b, stream);
-    //         cudaStreamSynchronize(stream);
-    //         cudaEventElapsedTime(&temp, a, b);
-    //         ms+=temp;
-    //     }
-    //     printf("Decompression U, V elasped time is %f ms, speed GiB/s: %f\n", ms/N, bytes / GiB / (ms / N / 1000));
-    // }
-    // cudaStreamDestroy(stream);
+    //test decompression U,V
+    printf("Rember, when test decompression, the decompression dara will be wrong\n");
+    cudaStreamCreate(&stream);
+    cudaEventCreate(&a), cudaEventCreate(&b);
+    for (int i_count=0;i_count<3;i_count++){
+        float ms = 0.0;
+        for (size_t i = 0; i < N; i++)
+        {
+            float temp;
+            cudaEventRecord(a, stream);
+            thrust::for_each(
+                idx_first, idx_last,
+                [=] __device__ (size_t i) {
+                    if(eq_dEb_U==0){
+                        dEb_U_dcomp[i] = 0;
+                    }
+                    if(eq_dEb_U!=0){
+                        dEb_U_dcomp[i] = (T)(1ULL << (2 * eq_dEb_U[i])) * threshold;
+                    }
+                    if(eq_dEb_V==0){
+                        dEb_V_dcomp[i] = 0;
+                    }
+                    if(eq_dEb_V!=0){
+                        dEb_V_dcomp[i] = (T)(1ULL << (2 * eq_dEb_V[i])) * threshold;
+                    }
+                }
+            );
+            //move ov_val to dU_decomp accrording to ot_idx
+            thrust::scatter(thrust::device, ot_val_U, ot_val_U + *h_ot_num_U, ot_idx_U, dU_decomp);
+            //decompression kernel
+            psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
+                eq_U, /*input*/dU_decomp, /*output*/dU_decomp, dim3(r2, r1, 1), dEb_U_dcomp, RADIUS, &lrz_time, 0);
+            //move ebIsZero_U_data back to dU
+            thrust::scatter(thrust::device, ebIsZero_U_data, ebIsZero_U_data + zero_eb_U_count, ebIsZero_U_indices, dU_decomp);
+            //move ov_val to dU_decomp accrording to ot_idx
+            thrust::scatter(thrust::device, ot_val_V, ot_val_V + *h_ot_num_V, ot_idx_V, dV_decomp);
+            //decompression kernel
+            psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, uint16_t>(
+                eq_V, /*input*/dV_decomp, /*output*/dV_decomp, dim3(r2, r1, 1), dEb_V_dcomp, RADIUS, &lrz_time, 0);
+            //move ebisZero_V_data back to dV
+            thrust::scatter(thrust::device, ebisZero_V_data, ebisZero_V_data + zero_eb_U_count, ebIsZero_V_indices, dV_decomp);
+            //cudaDeviceSynchronize();
+            cudaEventRecord(b, stream);
+            cudaStreamSynchronize(stream);
+            cudaEventElapsedTime(&temp, a, b);
+            ms+=temp;
+        }
+        float huffman_decoding_time_U = 2.020486;
+        float huffman_decoding_time_V = 2.136064;
+        float huffman_decoding_time_eb_U = 0.80224;
+        float huffman_decoding_time_eb_V = 0.724960;
+        float huffman_time = huffman_decoding_time_U + huffman_decoding_time_V + huffman_decoding_time_eb_U + huffman_decoding_time_eb_V;
+        printf("Decompression U, V elasped time is %f ms, speed GiB/s: %f\n", ms/N + huffman_time, bytes / GiB / ((ms / N + huffman_time) / 1000));
+    }
+    cudaStreamDestroy(stream);
 
     cudaError_t err;
     printf("compute eq done\n");
