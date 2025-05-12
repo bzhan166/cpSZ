@@ -1013,7 +1013,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
     T* dEb_U_dcomp; cudaMalloc(&dEb_U_dcomp, r1 * r2 * sizeof(T));
     T* dEb_V_dcomp; cudaMalloc(&dEb_V_dcomp, r1 * r2 * sizeof(T));
     thrust::for_each(
-        idx_first, idx_last,
+        thrust::device, idx_first, idx_last,
         [=] __device__ (size_t i) {
             if(eq_dEb_U==0){
                 dEb_U_dcomp[i] = 0;
@@ -1064,6 +1064,8 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
         for (size_t i = 0; i < N; i++)
         {
             float temp;
+            cudaMemsetAsync(dU_decomp, 0, r1 * r2 * sizeof(T), stream);
+            cudaMemsetAsync(dV_decomp, 0, r1 * r2 * sizeof(T), stream);
             cudaEventRecord(a, stream);
             thrust::for_each(
                 exec, idx_first, idx_last,
