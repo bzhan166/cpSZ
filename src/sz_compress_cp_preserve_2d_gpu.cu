@@ -1162,7 +1162,6 @@ int main(int argc, char ** argv){
     float max_eb = atof(argv[5]);
 
     cout << "start Compression\n";
-    using uint8_t = unsigned char;
 
     // float* ot_val_U; cudaMalloc(&ot_val_U, r2 * r1 * sizeof(float));
     // uint32_t* ot_idx_U; cudaMalloc(&ot_idx_U, r2 * r1 * sizeof(uint32_t));
