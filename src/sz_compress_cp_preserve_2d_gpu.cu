@@ -786,13 +786,13 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
             if(COMPUTE_RATIO==1){
                 printf("COMPUTE_RATIO\n");
                 //computer the ratio
-                float outlen = 4762964.0;
+                float outlen = 4762708.0;
                 float eb_outlen = 2015272.0;
                 float denominator = (*h_ot_num_U*4.0 + zero_eb_U_count*4 + outlen + eb_outlen);
                 float ratio = (3600*2400*4.0/denominator);
                 printf("U compression ratio: %f\n", ratio);
                 //computer the V ratio
-                outlen = 4835916.0;
+                outlen = 4835660.0;
                 eb_outlen = 2011968.0;
                 denominator = (*h_ot_num_V*4.0 + zero_eb_V_count*4 + outlen + eb_outlen);
                 ratio = (3600*2400*4.0/denominator);
@@ -912,10 +912,10 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
                             cudaEventElapsedTime(&temp, a, b);
                             ms+=temp;
                         }
-                        float huffman_time_U = 0.391360;
-                        float huffman_time_V = 0.398784;
-                        float huffman_time_eb_U = 0.394016;
-                        float huffman_time_eb_V = 0.396640;
+                        float huffman_time_U = 0.378368;
+                        float huffman_time_V = 0.387328;
+                        float huffman_time_eb_U = 0.363936;
+                        float huffman_time_eb_V = 0.370752;
                         float huffman_time = huffman_time_U + huffman_time_V + huffman_time_eb_U + huffman_time_eb_V;
                         printf("Overall time is %f ms, V3 speed GiB/s: %f\n", ms/N + huffman_time, bytes / GiB / ((ms / N + huffman_time) / 1000));
                     }
@@ -1103,10 +1103,10 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
             cudaEventElapsedTime(&temp, a, b);
             ms+=temp;
         }
-        float huffman_decoding_time_U = 1.833984;
-        float huffman_decoding_time_V = 1.783648;
-        float huffman_decoding_time_eb_U = 0.592896;
-        float huffman_decoding_time_eb_V = 0.541696;
+        float huffman_decoding_time_U = 0.849920;
+        float huffman_decoding_time_V = 0.922624;
+        float huffman_decoding_time_eb_U = 0.428032;
+        float huffman_decoding_time_eb_V = 0.414496;
         float huffman_time = huffman_decoding_time_U + huffman_decoding_time_V + huffman_decoding_time_eb_U + huffman_decoding_time_eb_V;
         printf("Decompression U, V elasped time is %f ms, speed GiB/s: %f\n", ms/N + huffman_time, bytes / GiB / ((ms / N + huffman_time) / 1000));
     }
@@ -1175,9 +1175,9 @@ int main(int argc, char ** argv){
     allocOtData(ot_U, num_elements);;
     OtData ot_V;
     allocOtData(ot_V, num_elements);
-    uint16_t *eq_U, *eq_V;
-    cudaMalloc(&eq_U, r2 * r1 * sizeof(uint16_t));
-    cudaMalloc(&eq_V, r2 * r1 * sizeof(uint16_t));
+    uint8_t *eq_U, *eq_V;
+    cudaMalloc(&eq_U, r2 * r1 * sizeof(uint8_t));
+    cudaMalloc(&eq_V, r2 * r1 * sizeof(uint8_t));
     uint8_t *eq_dEb_U, *eq_dEb_V;
     cudaMalloc(&eq_dEb_U, r2 * r1 * sizeof(uint8_t));
     cudaMalloc(&eq_dEb_V, r2 * r1 * sizeof(uint8_t));

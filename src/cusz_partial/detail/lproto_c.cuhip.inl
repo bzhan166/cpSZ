@@ -395,21 +395,23 @@ pszerror GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list(
 }  // namespace psz::cuhip
 
 ////////////////////////////////////////////////////////////////////////////////
-#define INSTANTIATIE_GPU_LORENZO_PROTO_C_2params(T)                     \
-  template pszerror psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier<T>( \
-      T* const in_data, dim3 const data_len3, uint16_t* const out_eq,   \
+#define INSTANTIATIE_GPU_LORENZO_PROTO_C_2params(T, Eq)                     \
+  template pszerror psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier<T, Eq>( \
+      T* const in_data, dim3 const data_len3, Eq* const out_eq,   \
       void* out_outlier, double const eb, uint16_t const radius,        \
       float* time_elapsed, void* stream);\
-  template pszerror psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct<T>( \
-      T* const in_data, dim3 const data_len3, uint16_t* const out_eq,   \
+  template pszerror psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct<T, Eq>( \
+      T* const in_data, dim3 const data_len3, Eq* const out_eq,   \
       T* out_ot_val, uint32_t* out_ot_idx, uint32_t* out_ot_num, \
       double const eb, uint16_t const radius,        \
       float* time_elapsed, void* stream); \
-  template pszerror psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T>( \
-      T* const in_data, dim3 const data_len3, uint16_t* const out_eq,   \
+  template pszerror psz::cuhip::GPU_PROTO_c_lorenzo_nd_with_outlier__bypass_outlier_struct__eb_list<T, Eq>( \
+      T* const in_data, dim3 const data_len3, Eq* const out_eq,   \
       T* out_ot_val, uint32_t* out_ot_idx, uint32_t* out_ot_num, \
       T* eb_list, uint16_t const radius,        \
       float* time_elapsed, void* stream);
 
 #define INSTANTIATIE_LORENZO_PROTO_C_1param(T) \
-  INSTANTIATIE_GPU_LORENZO_PROTO_C_2params(T);
+  INSTANTIATIE_GPU_LORENZO_PROTO_C_2params(T, uint16_t); \
+  INSTANTIATIE_GPU_LORENZO_PROTO_C_2params(T, uint8_t);
+

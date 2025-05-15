@@ -309,13 +309,14 @@ pszerror GPU_PROTO_x_lorenzo_nd__eb_list(
 }  // namespace psz::cuhip
 
 ////////////////////////////////////////////////////////////////////////////////
-#define INSTANTIATIE_GPU_LORENZO_PROTO_X_2params(T)                         \
-  template pszerror psz::cuhip::GPU_PROTO_x_lorenzo_nd<T>(                  \
-      uint16_t * in_eq, T * in_outlier, T * out_data, dim3 const data_len3, \
+#define INSTANTIATIE_GPU_LORENZO_PROTO_X_2params(T, Eq)                         \
+  template pszerror psz::cuhip::GPU_PROTO_x_lorenzo_nd<T, Eq>(                  \
+      Eq * in_eq, T * in_outlier, T * out_data, dim3 const data_len3, \
       double const eb, int const radius, float* time_elapsed, void* stream);\
-  template pszerror psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T>(         \
-      uint16_t * in_eq, T * in_outlier, T * out_data, dim3 const data_len3, \
+  template pszerror psz::cuhip::GPU_PROTO_x_lorenzo_nd__eb_list<T, Eq>(         \
+      Eq * in_eq, T * in_outlier, T * out_data, dim3 const data_len3, \
       T* eb_list, int const radius, float* time_elapsed, void* stream);
 
 #define INSTANTIATIE_LORENZO_PROTO_X_1param(T) \
-  INSTANTIATIE_GPU_LORENZO_PROTO_X_2params(T);
+  INSTANTIATIE_GPU_LORENZO_PROTO_X_2params(T, uint16_t); \
+  INSTANTIATIE_GPU_LORENZO_PROTO_X_2params(T, uint8_t); 
