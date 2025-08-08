@@ -251,7 +251,138 @@ template<typename T>
     return eb;
 }
 
-//version 3, single thread muti-compute 32*32 data mapto 32*8
+//version 2, single thread muti-compute 32*32 data map to 32*8
+template <typename T, typename Eq2 = uint16_t, int TileDim_X = BLOCKSIZE_X, int TileDim_Y = BLOCKSIZE_Y>
+__global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restrict__ dV, T* __restrict__ dEb, T* __restrict__  dEb_U,  T* __restrict__ dEb_V, 
+        Eq2* __restrict eq_dEb_U, Eq2* __restrict eq_dEb_V, int r1, int r2, T max_pwr_eb){
+    __shared__ T buf_U[TileDim_Y][TileDim_X+1];
+    __shared__ T buf_V[TileDim_Y][TileDim_X+1];
+    __shared__ T per_cell_eb_L[TileDim_Y][TileDim_X+1];
+    __shared__ T per_cell_eb_U[TileDim_Y][TileDim_X+1];
+    __shared__ T buf_eb[TileDim_Y][TileDim_X+1];  
+    int row = blockIdx.y * (blockDim.y-2) + threadIdx.y; // global row index
+    int col = blockIdx.x * (blockDim.x-2) + threadIdx.x; // global col index
+    int localRow = threadIdx.y; // local row index
+    int localCol = threadIdx.x; // local col index
+    //#define localRow threadIdx.y
+    //#define localCol threadIdx.x
+
+    T localmin = max_pwr_eb;
+
+    // load data from global memory to shared memory
+    if(row < r1 && col < r2){
+        buf_U[localRow][localCol] = dU[row * r2 + col];
+        buf_V[localRow][localCol] = dV[row * r2 + col];
+    }
+    __syncthreads();
+    
+    // compute error bound for each cell
+    if(localRow<TileDim_Y-1 && localCol<TileDim_X-1){
+        per_cell_eb_U[localRow][localCol] = gpu_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow][localCol+1], buf_U[localRow+1][localCol+1],
+            buf_V[localRow][localCol], buf_V[localRow][localCol+1], buf_V[localRow+1][localCol+1]);
+        per_cell_eb_L[localRow][localCol] = gpu_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow+1][localCol], buf_U[localRow+1][localCol+1],
+            buf_V[localRow][localCol], buf_V[localRow+1][localCol], buf_V[localRow+1][localCol+1]);
+    }
+    __syncthreads();
+
+    if(localRow<TileDim_Y-2 && localCol<TileDim_X-2)
+    {
+        auto temp = per_cell_eb_U[localRow][localCol];
+        localmin = min(localmin, temp);
+        temp =  per_cell_eb_L[localRow][localCol];
+        localmin = min(localmin, temp);
+        temp =  per_cell_eb_U[localRow+1][localCol];
+        localmin = min(localmin, temp);
+        temp = per_cell_eb_L[localRow][localCol+1];
+        localmin = min(localmin, temp);
+        temp = per_cell_eb_U[localRow+1][localCol+1];
+        localmin = min(localmin, temp);
+        temp = per_cell_eb_L[localRow+1][localCol+1];
+        localmin = min(localmin, temp);
+        buf_eb[localRow][localCol] = localmin;
+    }
+    __syncthreads();
+
+    /*
+    //For centeral part bug_check
+    if (localRow<TileDim_Y-1 && localCol<TileDim_X-1 && row*r2+col == 24508) {
+        buf_eb[localRow][localCol] = min(per_cell_eb_U[localRow][localCol], per_cell_eb_L[localRow][localCol]);
+        printf("buf_eb[%d][%d]: %.4f\n", localRow, localCol, buf_eb[localRow][localCol]);
+
+        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow + 1][localCol]);
+        printf("buf_eb[%d][%d] after U[%d+1][%d]: %.4f\n", localRow, localCol, localRow, localCol, buf_eb[localRow][localCol]);
+
+        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow][localCol + 1]);
+        printf("buf_eb[%d][%d] after L[%d][%d+1]: %.4f\n", localRow, localCol, localRow, localCol, buf_eb[localRow][localCol]);
+
+        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_U[localRow + 1][localCol + 1]);
+        printf("buf_eb[%d][%d] after U[%d+1][%d+1]: %.4f\n", localRow, localCol, localRow, localCol, buf_eb[localRow][localCol]);
+
+        buf_eb[localRow][localCol] = min(buf_eb[localRow][localCol], per_cell_eb_L[localRow + 1][localCol + 1]);
+        printf("buf_eb[%d][%d] after L[%d+1][%d+1]: %.4f\n", localRow, localCol, localRow, localCol, buf_eb[localRow][localCol]);
+
+        // 打印每个相关变量的值
+        printf("Variables:\n");
+        printf("row: %d, col: %d\n", row, col);
+        printf("localRow: %d, localCol: %d\n", localRow, localCol);
+        printf("per_cell_eb_U[%d][%d]: %.4f\n", localRow, localCol, per_cell_eb_U[localRow][localCol]);
+        printf("per_cell_eb_L[%d][%d]: %.4f\n", localRow, localCol, per_cell_eb_L[localRow][localCol]);
+        printf("per_cell_eb_U[%d+1][%d]: %.4f\n", localRow, localCol, per_cell_eb_U[localRow + 1][localCol]);
+        printf("per_cell_eb_L[%d][%d+1]: %.4f\n", localRow, localCol, per_cell_eb_L[localRow][localCol + 1]);
+        printf("per_cell_eb_U[%d+1][%d+1]: %.4f\n", localRow, localCol, per_cell_eb_U[localRow + 1][localCol + 1]);
+        printf("per_cell_eb_L[%d+1][%d+1]: %.4f\n", localRow, localCol, per_cell_eb_L[localRow + 1][localCol + 1]);
+    }
+    __syncthreads();
+    */
+
+    if(row<r1-2 && col<r2-2 && localRow<TileDim_Y-2 && localCol<TileDim_X-2)
+    {
+        T threshold = (T)(1.0 / (1 << 20));
+        int id;
+        auto temp = buf_eb[localRow][localCol] * fabs(buf_U[localRow+1][localCol+1]);
+        if(temp <= threshold){
+            temp = 0;
+            id = 0;
+        }
+        if(temp > threshold){
+            id = log2(temp / threshold)/2.0;
+            temp = (T)(1ULL << (2 * id)) * threshold;
+        }
+
+        dEb_U[(row+1) * r2 + (col+1)] = temp;
+        eq_dEb_U[(row+1) * r2 + (col+1)] = id;
+
+        temp = buf_eb[localRow][localCol] * fabs(buf_V[localRow+1][localCol+1]);
+        if(temp <= threshold){
+            temp = 0;
+            id = 0;
+        }
+        if(temp > threshold){
+            id = log2(temp / threshold)/2.0;
+            temp = (T)(1ULL << (2 * id)) * threshold;
+        }
+
+        dEb_V[(row+1) * r2 + (col+1)] =  temp;
+        eq_dEb_V[(row+1) * r2 + (col+1)] = id;
+        
+        // if((row+1)*r2 + (col+1) == 24509){
+        //     printf("dEB_U:%f, eq_dEb_U:%d, dEB_V:%f, eq_dEb_V:%d\n", 
+        //         dEb_U[(row+1) * r2 + (col+1)], eq_dEb_U[(row+1) * r2 + (col+1)], 
+        //         dEb_V[(row+1) * r2 + (col+1)], eq_dEb_V[(row+1) * r2 + (col+1)]);
+        // }
+    }
+    __syncthreads();
+
+    if((row == 0 || col ==0 || row==r1-1 || col == r2-1)&&(row<r1-1 && col<r2-1)){
+        dEb_U[row * r2 + col] = 0;
+        dEb_V[row * r2 + col] = 0;
+        eq_dEb_U[row * r2 + col] = 0;
+        eq_dEb_V[row * r2 + col] = 0;
+    }
+    __syncthreads();
+}
+
+//version 3, single thread muti-compute 32*32 data map to 32*8
 template <typename T, typename Eq2 = uint16_t, int TileDim_X = BLOCKSIZE_X, int TileDim_Y = BLOCKSIZE_Y>
 __global__ void derive_eb_offline_v3(const T* __restrict__ dU, const T* __restrict__ dV, T* __restrict__ dEb, T* __restrict__  dEb_U,  T* __restrict__ dEb_V, 
         Eq2* __restrict eq_dEb_U, Eq2* __restrict eq_dEb_V, int r1, int r2, T max_pwr_eb){
@@ -384,7 +515,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
         T* U_decomp, T* V_decomp){
     
     #define RUN_DERIVE_EB 1
-        #define VERFIY_DERIVE_EB 0
+        #define VERFIY_DERIVE_EB 1
         #define TEST_DERIVE_EB 1
         #define DEAL_WITH_LAND_DATA 1
             #define TEST_DEAL_WITH_LAND_DATA 1
@@ -407,6 +538,9 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
     const T threshold = (T)(1.0 / (1 << 20));
     cudaStream_t stream;
     cudaEvent_t a, b;
+    dim3 blockSize_v2(BLOCKSIZE_X, BLOCKSIZE_Y, 1);
+    dim3 gridSize_v2((r2 + (blockSize_v2.x-2) - 1) / (blockSize_v2.x-2), 
+        (r1 + (blockSize_v2.y-2)-1) / (blockSize_v2.y-2));
     dim3 blockSize_v3(BLOCKSIZE_X, BLOCKSIZE_Y, 1);
     dim3 gridSize_v3((r2 + (blockSize_v3.x-2) - 1) / (blockSize_v3.x-2), 
         (r1 + (blockSize_v3.y*NUM_PRE_THREAD-2)-1) / (blockSize_v3.y*NUM_PRE_THREAD-2));
@@ -440,8 +574,10 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
     if(RUN_DERIVE_EB==1){
         printf("\nRUN_DERIVE_EB\n");
         cudaMemset(eb_gpu, max_pwr_eb, r2 * r1 * sizeof(T));
-        printf("gridSize_v3: %d, %d\n", gridSize_v3.x, gridSize_v3.y);
-        derive_eb_offline_v3<<<gridSize_v3, blockSize_v3>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_dEb_U, eq_dEb_V, r1, r2, max_pwr_eb);
+        printf("gridSize_v2: %d, %d\n", gridSize_v2.x, gridSize_v2.y);
+        derive_eb_offline_v2<<<gridSize_v2, blockSize_v2>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_dEb_U, eq_dEb_V, r1, r2, max_pwr_eb);
+        // printf("gridSize_v3: %d, %d\n", gridSize_v3.x, gridSize_v3.y);
+        // derive_eb_offline_v3<<<gridSize_v3, blockSize_v3>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_dEb_U, eq_dEb_V, r1, r2, max_pwr_eb);
         cudaDeviceSynchronize();
         printf("compute V3 eb_gpu done\n");
         printf("\n");
@@ -570,7 +706,8 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
                 {
                     float temp;
                     cudaEventRecord(a, stream);
-                    derive_eb_offline_v3<<<gridSize_v3, blockSize_v3, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_dEb_U, eq_dEb_V, r1, r2, max_pwr_eb);
+                    derive_eb_offline_v2<<<gridSize_v2, blockSize_v2, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_dEb_U, eq_dEb_V, r1, r2, max_pwr_eb);
+                    //derive_eb_offline_v3<<<gridSize_v3, blockSize_v3, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_dEb_U, eq_dEb_V, r1, r2, max_pwr_eb);
                     //cudaDeviceSynchronize();
                     cudaEventRecord(b, stream);
                     cudaStreamSynchronize(stream);
@@ -872,7 +1009,8 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
                             float temp;
                             cudaEventRecord(a, stream);
                             {
-                                derive_eb_offline_v3<<<gridSize_v3, blockSize_v3, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_dEb_U, eq_dEb_V, r1, r2, max_pwr_eb);
+                                derive_eb_offline_v2<<<gridSize_v2, blockSize_v2, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_dEb_U, eq_dEb_V, r1, r2, max_pwr_eb);
+                                //derive_eb_offline_v3<<<gridSize_v3, blockSize_v3, 0, stream>>>(dU, dV, eb_gpu, dEb_U, dEb_V, eq_dEb_U, eq_dEb_V, r1, r2, max_pwr_eb);
                                 thrust::for_each(
                                     exec, idx_first, idx_last,
                                     [=] __device__ (size_t i) {
@@ -1104,7 +1242,7 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
             ms+=temp;
         }
         float huffman_decoding_time_U = 0.849920;
-        float huffman_decoding_time_V = 0.922624;
+        float huffman_decoding_time_V = 0.926624;
         float huffman_decoding_time_eb_U = 0.428032;
         float huffman_decoding_time_eb_V = 0.414496;
         float huffman_time = huffman_decoding_time_U + huffman_decoding_time_V + huffman_decoding_time_eb_U + huffman_decoding_time_eb_V;
