@@ -322,7 +322,7 @@ int main(int argc, char **argv)
   // clean(u, num);clean(v, num);clean(w, num);
 
   struct timespec start, end;
-  int err = 0;
+  int err = 0; 
   err = clock_gettime(CLOCK_REALTIME, &start);
   auto critical_points_1 = compute_critical_points(u, v, w, DD, DH, DW);
   err = clock_gettime(CLOCK_REALTIME, &end);

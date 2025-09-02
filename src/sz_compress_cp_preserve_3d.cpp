@@ -13,152 +13,159 @@ static const int coordinates[24][4][3] = {
 		{0, 1, 1},
 		{1, 1, 1},
 		{0, 0, 0}
-	},
+	},//per_cell_eb_z_up
 	{
 		{0, 1, 0},
 		{0, 1, 1},
 		{1, 1, 1},
 		{0, 0, 0}
-	},
+	},//per_cell_eb_y_low
 	{
 		{0, 0, 1},
 		{1, 0, 1},
 		{1, 1, 1},
 		{0, 0, 0}
-	},
+	},//per_cell_eb_z_low
 	{
 		{1, 0, 0},
 		{1, 0, 1},
 		{1, 1, 1},
 		{0, 0, 0}
-	},
+	},//per_cell_eb_x_low
 	{
 		{0, 1, 0},
 		{1, 1, 0},
 		{1, 1, 1},
 		{0, 0, 0}
-	},
+	},//per_cell_eb_y_up
 	{
 		{1, 0, 0},
 		{1, 1, 0},
 		{1, 1, 1},
 		{0, 0, 0}
-	},
+	},//per_cell_eb_x_up
+
 	// offset = -1, 0, 0
 	{
 		{0, 0, 0},
 		{1, 0, 1},
 		{1, 1, 1},
 		{1, 0, 0}
-	},
+	},//per_cell_eb_x_low
 	{
 		{0, 0, 0},
 		{1, 1, 0},
 		{1, 1, 1},
 		{1, 0, 0}
-	},
+	},//per_cell_eb_x_up
+	
 	// offset = 0, -1, 0
 	{
 		{0, 0, 0},
 		{0, 1, 1},
 		{1, 1, 1},
 		{0, 1, 0}
-	},
+	},//per_cell_eb_y_low
 	{
 		{0, 0, 0},
 		{1, 1, 0},
 		{1, 1, 1},
 		{0, 1, 0}
-	},
+	},//per_cell_eb_y_up
+
 	// offset = -1, -1, 0
 	{
 		{0, 0, 0},
 		{0, 1, 0},
 		{1, 1, 1},
 		{1, 1, 0}
-	},
+	},//per_cell_eb_y_up
 	{
 		{0, 0, 0},
 		{1, 0, 0},
 		{1, 1, 1},
 		{1, 1, 0}
-	},
+	},//per_cell_eb_x_up
+
 	// offset = 0, 0, -1
 	{
 		{0, 0, 0},
 		{0, 1, 1},
 		{1, 1, 1},
 		{0, 0, 1}
-	},
+	},//per_cell_eb_z_up
 	{
 		{0, 0, 0},
 		{1, 0, 1},
 		{1, 1, 1},
 		{0, 0, 1}
-	},
+	},//per_cell_eb_z_low
+
 	// offset = -1, 0, -1
 	{
 		{0, 0, 0},
 		{0, 0, 1},
 		{1, 1, 1},
 		{1, 0, 1}
-	},
+	},//per_cell_eb_z_low
 	{
 		{0, 0, 0},
 		{1, 0, 0},
 		{1, 1, 1},
 		{1, 0, 1}
-	},
+	},//per_cell_eb_x_low
+
 	// offset = 0, -1, -1
 	{
 		{0, 0, 0},
 		{0, 0, 1},
 		{1, 1, 1},
 		{0, 1, 1}
-	},
+	},//per_cell_eb_z_up
 	{
 		{0, 0, 0},
 		{0, 1, 0},
 		{1, 1, 1},
 		{0, 1, 1}
-	},
+	},//per_cell_eb_y_low
+
 	// offset = -1, -1, -1
 	{
 		{0, 0, 0},
 		{0, 0, 1},
 		{0, 1, 1},
 		{1, 1, 1}
-	},
+	},//per_cell_eb_z_up
 	{
 		{0, 0, 0},
 		{0, 1, 0},
 		{0, 1, 1},
 		{1, 1, 1}
-	},
+	},//per_cell_eb_y_low
 	{
 		{0, 0, 0},
 		{0, 0, 1},
 		{1, 0, 1},
 		{1, 1, 1}
-	},
+	},//per_cell_eb_z_low
 	{
 		{0, 0, 0},
 		{1, 0, 0},
 		{1, 0, 1},
 		{1, 1, 1}
-	},
+	},//per_cell_eb_x_low
 	{
 		{0, 0, 0},
 		{0, 1, 0},
 		{1, 1, 0},
 		{1, 1, 1}
-	},
+	},//per_cell_eb_y_up
 	{
 		{0, 0, 0},
 		{1, 0, 0},
 		{1, 1, 0},
 		{1, 1, 1}
-	}
+	}//per_cell_eb_x_up
 };
 
 // default coordinates for tets in a cell
@@ -454,7 +461,7 @@ sz_compress_cp_preserve_3d_offline_log(const T * U, const T * V, const T * W, si
 	std::unordered_map<int, vector<bool>> flags;
 	double threshold = std::numeric_limits<float>::epsilon();
 	int eb_quant_index_max = (int) (log2(1.0 / threshold)/log_of_base) + 1;
-
+	
 	const double * eb_offline_pos = eb_offline;
 	for(int i=0; i<r1; i++){
 		// printf("start %d row\n", i);

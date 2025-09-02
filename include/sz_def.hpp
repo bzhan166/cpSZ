@@ -166,4 +166,3 @@ template<class T>
 #define LorenzeNoise3d 1.22
 
 #endif
-

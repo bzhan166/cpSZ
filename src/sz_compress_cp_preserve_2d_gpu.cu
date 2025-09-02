@@ -99,8 +99,8 @@ template<typename T>
 [[nodiscard]] constexpr inline T max_eb_to_keep_sign_2d_offline_2(const T volatile u0, const T volatile u1, const int degree=2){
     T positive = 0;
     T negative = 0;
-    accumulate(u0, positive, negative);
-    accumulate(u1, positive, negative);
+    accumulate_2d(u0, positive, negative);
+    accumulate_2d(u1, positive, negative);
     return max_eb_to_keep_sign(positive, negative, degree);
 }
 
@@ -119,10 +119,10 @@ template<typename T>
 [[nodiscard]] constexpr inline T max_eb_to_keep_sign_2d_offline_4(const T volatile u0, const T volatile u1, const T volatile u2, const T volatile u3, const int degree=2){
     T positive = 0;
     T negative = 0;
-    accumulate(u0, positive, negative);
-    accumulate(u1, positive, negative);
-    accumulate(u2, positive, negative);
-    accumulate(u3, positive, negative);
+    accumulate_2d(u0, positive, negative);
+    accumulate_2d(u1, positive, negative);
+    accumulate_2d(u2, positive, negative);
+    accumulate_2d(u3, positive, negative);
     return max_eb_to_keep_sign(positive, negative, degree);
 }
 
@@ -276,7 +276,6 @@ __global__ void derive_eb_offline_v2(const T* __restrict__ dU, const T* __restri
     }
     __syncthreads();
     
-    // compute error bound for each cell
     if(localRow<TileDim_Y-1 && localCol<TileDim_X-1){
         per_cell_eb_U[localRow][localCol] = gpu_max_eb_to_keep_position_and_type(buf_U[localRow][localCol], buf_U[localRow][localCol+1], buf_U[localRow+1][localCol+1],
             buf_V[localRow][localCol], buf_V[localRow][localCol+1], buf_V[localRow+1][localCol+1]);
@@ -631,12 +630,12 @@ sz_compress_cp_preserve_2d_offline_gpu(const T * U, const T * V,
             T * eb_v = (T *) malloc(num_elements * sizeof(T));
             for(int i=0; i<num_elements; i++){
                 eb_u[i] = fabs(U[i]) * eb[i];
-                int temp_eb_u = eb_exponential_quantize(eb_u[i], base, log2_of_base, threshold);
+                int temp_eb_u = eb_exponential_quantize_2d(eb_u[i], base, log2_of_base, threshold);
                 if(eb_u[i] < threshold) eb_u[i] = 0;
             }
             for(int i=0; i<num_elements; i++){
                 eb_v[i] = fabs(V[i]) * eb[i];
-                int temp_eb_v = eb_exponential_quantize(eb_v[i], base, log2_of_base, threshold);
+                int temp_eb_v = eb_exponential_quantize_2d(eb_v[i], base, log2_of_base, threshold);
                 if(eb_v[i] < threshold) eb_v[i] = 0;
             }
             //verfiy eb_u_gpu

@@ -106,19 +106,33 @@ __global__ void KERNEL_CUHIP_prototype_c_lorenzo_2d1l__eb_list(
 {
   SETUP_ND_GPU_CUDA;
   __shared__ T buf[TileDim][TileDim + 1];
+  // __shared__ T buf_decompressed[TileDim][TileDim + 1];
+
   uint32_t y = threadIdx.y, x = threadIdx.x;
   auto data = [&](auto dx, auto dy) -> T& {
     return buf[t().y + dy][t().x + dx];
   };
+  // auto decompressed_data =[&](auto dx, auto dy) -> T& {
+  //   return buf_decompressed[t().y + dy][t().x + dx];
+  // };
+
   auto id = gid2();
   if (check_boundary2()) { 
     auto ebx2_r = 0.5 / eb_list[id];
-    data(0, 0) = round(in_data[id] *  ebx2_r); 
+    data(0, 0) = round(in_data[id] *  ebx2_r); //quantilize
+    // decompressed_data(0, 0) = data(0, 0) * eb_list[id] * 2; //dequantilize
   }
   __syncthreads();
   T delta = data(0, 0) - ((x > 0 ? data(-1, 0) : 0) +             // dist=1
-                          (y > 0 ? data(0, -1) : 0) -             // dist=1
-                          (x > 0 and y > 0 ? data(-1, -1) : 0));  // dist=2
+                        (y > 0 ? data(0, -1) : 0) -             // dist=1
+                        (x > 0 and y > 0 ? data(-1, -1) : 0));  // dist=2
+  // T decompressed_delta = round((decompressed_data(0, 0) - ((x > 0 ? decompressed_data(-1, 0) : 0) +              // dist=1
+  //                                      (y > 0 ? decompressed_data(0, -1) : 0) -                     // dist=1
+  //                                      (x > 0 and y > 0 ? decompressed_data(-1, -1) : 0)))          // dist=2
+  //                                                                                         /(2*eb_list[id]));  
+  // if(id==4232079){
+  //   printf("id:%d, data:%f, decompressed_data:%f, delta:%f, decompressed_delta:%f, eb_list:%f\n", id, data(0,0), decompressed_data(0,0), delta, decompressed_delta, eb_list[id]);
+  // }
   bool quantizable = ((fabs(delta) < radius));
   T candidate = delta + radius;
   if (check_boundary2()) {

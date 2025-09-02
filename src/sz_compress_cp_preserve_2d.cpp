@@ -17,8 +17,8 @@ void writefile(const char * file, Type * data, size_t num_elements){
 // maximal error bound to keep the sign of u0v1 - u0v2 + u1v2 - u1v0 + u2v0 - u2v1
 template<typename T>
 inline double max_eb_to_keep_sign_det2x2(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2){
-  T positive = 0;
-  T negative = 0;
+  double positive = 0;
+  double negative = 0;
   accumulate(u0*v1, positive, negative);
   accumulate(-u0*v2, positive, negative);
   accumulate(u1*v2, positive, negative);
@@ -64,7 +64,7 @@ inline void get_adjugate_matrix_for_position(const T x0, const T x1, const T x2,
 
 // accumulate positive and negative in (a + b + c ...)^2
 template<typename T>
-inline void accumulate_in_square(const std::vector<T>& coeff, T& positive, T& negative){
+inline void accumulate_in_square(const std::vector<T>& coeff, double& positive, double& negative){
   for(int i=0; i<coeff.size(); i++){
     for(int j=0; j<coeff.size(); j++){
       accumulate(coeff[i]*coeff[j], positive, negative);
@@ -83,8 +83,8 @@ inline double max_eb_to_keep_sign_eigen_delta_2(const T u0, const T u1, const T 
   {
     get_adjugate_matrix_for_position(x0, x1, x2, y0, y1, y2, c);
     // keep sign for B
-    T positive = 0;
-    T negative = 0;
+    double positive = 0;
+    double negative = 0;
     accumulate(c[0]*u0, positive, negative);
     accumulate(c[1]*u1, positive, negative);
     accumulate(-(c[0] + c[1])*u2, positive, negative);
@@ -108,8 +108,8 @@ inline double max_eb_to_keep_sign_eigen_delta_2(const T u0, const T u1, const T 
     coeff[4] = c[3]*v1;
     coeff[5] = - (c[3] + c[2])*v2;
     // keep sign for B^2 - 4*C
-    T positive = 0;
-    T negative = 0;
+    double positive = 0;
+    double negative = 0;
     accumulate_in_square(coeff, positive, negative);
     accumulate(-4*m*u1*v0, positive, negative);
     accumulate(4*m*u2*v0, positive, negative);

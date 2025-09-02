@@ -11,8 +11,18 @@
 template<typename T>
 using unpred_vec = std::vector<T>;
 
+inline int eb_exponential_quantize(double& eb, const int base, const double log_of_base, const double threshold=std::numeric_limits<float>::epsilon()){
+	if(eb <= threshold){
+		eb = 0;
+		return 0;
+	}
+	int id = log2(eb / threshold)/log_of_base;
+	eb = pow(base, id) * threshold;
+	return id;
+}
+
 template<typename T>
-[[nodiscard]] constexpr inline int eb_exponential_quantize(T& eb, const int base, const T log_of_base, const T threshold=std::numeric_limits<T>::epsilon()){
+[[nodiscard]] constexpr inline int eb_exponential_quantize_2d(T& eb, const int base, const T log_of_base, const T threshold=std::numeric_limits<T>::epsilon()){
 	if(eb <= threshold){
 		eb = 0;
 		return 0;
@@ -174,19 +184,20 @@ inline float acbrt1(float x0) {
 }
 
 inline float max_eb_to_keep_sign_3d_offline(const float positive, const float negative){
+	if(positive == 0 && negative == 0) return 0;
 	float P = acbrt1(positive);
 	float N = acbrt1(negative);
 	return fabs(P - N)/(P + N);
 }
 
 template<typename T>
-constexpr inline void accumulate(const T volatile value, T & positive, T & negative){
+constexpr inline void accumulate(const T volatile value, double & positive, double & negative){
 	if(value >= 0) positive += value;
 	else negative += - value;
 }
 
 template<typename T>
-constexpr inline void gpu_accumulate(const T volatile value, T & positive, T & negative){
+constexpr inline void accumulate_2d(const T volatile value, T & positive, T & negative){
 	if(value >= 0) positive += value;
 	else negative += - value;
 }
