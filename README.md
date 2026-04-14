@@ -1,20 +1,14 @@
 # cpSZ-GPU
 Critical point preserving compression for vector fields (GPU Implementation)
 
-## Installation
-
-### CPU Version (cpSZ)
-**Dependencies:**
-- ZSTD
-
-**Build:**
-```bash
-sh build_script.sh
-
-### GPU Version (cpSZ)
-**Build:**
-cd src
-make
+# Installation
+Intall cpu verison cpsz <br>
+sh build_script.sh <br>
+<br>
+Install gpu verison cpsz <br> 
+cd src <br>
+make <br>
+Dependancies: ZSTD <br>
 
 # Run compression
 ./cpszg_2d ../data/uf.dat ../data/vf.dat 2400 3600 0.1 <br>
