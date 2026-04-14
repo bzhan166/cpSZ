@@ -13,7 +13,6 @@ sh build_script.sh
 
 ### GPU Version (cpSZ)
 **Build:**
-```bash
 cd src
 make
 
