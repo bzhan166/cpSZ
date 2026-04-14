@@ -1,7 +1,9 @@
 # cpSZ-GPU
 Critical point preserving compression for vector fields (GPU Implementation)
 
-# Installation
+## Installation
+
+### CPU Version (cpSZ)
 Intall cpu verison cpsz <br>
 sh build_script.sh <br>
 <br>
