@@ -5,6 +5,7 @@ Critical point preserving compression for vector fields (GPU Implementation)
 Intall cpu verison cpsz <br>
 Dependancies: ZSTD <br>
 sh build_script.sh <br>
+<br>
 Install gpu verison cpsz <br> 
 cd src <br>
 make <br>
